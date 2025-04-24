@@ -308,9 +308,15 @@ function exportHtml() {
             <title>${selectedDatabase} - ${selectedTable} Schema</title>
             <script src="https://cdn.jsdelivr.net/npm/mermaid@11.6.0/dist/mermaid.min.js" crossorigin="anonymous" defer></script>
             <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
+                body { 
+                    font-family: Arial, sans-serif; 
+                    margin: 20px;
+                    overflow: hidden;
+                }
                 h1 { color: #2c3e50; }
-                .mermaid { font-family: 'Courier New', Courier, monospace; }
+                .mermaid { 
+                    font-family: 'Courier New', Courier, monospace;
+                }
                 .raw-schema { 
                     white-space: pre-wrap; 
                     font-family: monospace; 
@@ -319,24 +325,160 @@ function exportHtml() {
                     margin-top: 20px;
                     display: none;
                 }
+                .schema-container {
+                    position: relative;
+                    height: calc(100vh - 100px);
+                    overflow: auto;
+                    user-select: none;
+                    cursor: grab;
+                }
+                .schema-container:active {
+                    cursor: grabbing;
+                }
+                #schema-diagram {
+                    transform-origin: top left;
+                    transition: transform 0.2s ease;
+                    min-height: 100%;
+                    min-width: 100%;
+                }
+                .view-controls {
+                    position: fixed;
+                    top: 80px;
+                    right: 30px;
+                    z-index: 1000;
+                    display: flex;
+                    gap: 5px;
+                    background: rgba(255, 255, 255, 0.9);
+                    padding: 5px;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+                }
+                .view-controls button {
+                    background: rgba(255, 255, 255, 0.8);
+                    border: 1px solid #ddd;
+                    border-radius: 3px;
+                    width: 30px;
+                    height: 30px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    font-size: 16px;
+                    transition: background-color 0.2s;
+                }
+                .view-controls button:hover {
+                    background-color: #f0f0f0;
+                }
             </style>
         </head>
         <body>
             <h1>${selectedDatabase} - ${selectedTable} Schema</h1>
-            <pre class="mermaid">
+            <div class="view-controls">
+                <button id="zoom-in-btn" title="Zoom in">+</button>
+                <button id="zoom-out-btn" title="Zoom out">-</button>
+                <button id="reset-zoom-btn" title="Reset zoom">↺</button>
+            </div>
+            <div class="schema-container">
+                <div id="schema-diagram">
+                    <pre class="mermaid">
 ${exportSchema}
-            </pre>
+                    </pre>
+                </div>
+            </div>
             <div id="raw-schema" class="raw-schema">
 ${exportSchema}
             </div>
             <script>
                 document.addEventListener('DOMContentLoaded', function() {
                     const rawSchema = document.getElementById('raw-schema');
-
+                    const schemaDiagram = document.getElementById('schema-diagram');
+                    const schemaContainer = document.querySelector('.schema-container');
+                    const zoomInBtn = document.getElementById('zoom-in-btn');
+                    const zoomOutBtn = document.getElementById('zoom-out-btn');
+                    const resetZoomBtn = document.getElementById('reset-zoom-btn');
+                    
+                    let currentZoomLevel = 1;
+                    
                     function showRawSchema() {
                         rawSchema.style.display = 'block';
                     }
 
+                    // Zoom functions
+                    function zoomIn() {
+                        currentZoomLevel = Math.min(currentZoomLevel + 0.1, 20);
+                        applyZoom();
+                    }
+
+                    function zoomOut() {
+                        currentZoomLevel = Math.max(currentZoomLevel - 0.1, 0.5);
+                        applyZoom();
+                    }
+
+                    function resetZoom() {
+                        currentZoomLevel = 1;
+                        applyZoom();
+                    }
+
+                    function applyZoom() {
+                        if (schemaDiagram) {
+                            schemaDiagram.style.transform = \`scale(\${currentZoomLevel})\`;
+                        }
+                    }
+
+                    // Mouse drag functionality
+                    let isDragging = false;
+                    let startX, startY, scrollLeft, scrollTop;
+
+                    schemaContainer.addEventListener('mousedown', (e) => {
+                        isDragging = true;
+                        schemaContainer.style.cursor = 'grabbing';
+                        startX = e.pageX - schemaContainer.offsetLeft;
+                        startY = e.pageY - schemaContainer.offsetTop;
+                        scrollLeft = schemaContainer.scrollLeft;
+                        scrollTop = schemaContainer.scrollTop;
+                    });
+
+                    schemaContainer.addEventListener('mouseleave', () => {
+                        isDragging = false;
+                        schemaContainer.style.cursor = 'grab';
+                    });
+
+                    schemaContainer.addEventListener('mouseup', () => {
+                        isDragging = false;
+                        schemaContainer.style.cursor = 'grab';
+                    });
+
+                    schemaContainer.addEventListener('mousemove', (e) => {
+                        if (!isDragging) return;
+                        
+                        e.preventDefault();
+                        const x = e.pageX - schemaContainer.offsetLeft;
+                        const y = e.pageY - schemaContainer.offsetTop;
+                        
+                        const moveX = (x - startX);
+                        const moveY = (y - startY);
+                        
+                        schemaContainer.scrollLeft = scrollLeft - moveX;
+                        schemaContainer.scrollTop = scrollTop - moveY;
+                    });
+
+                    // Mouse wheel zoom
+                    schemaContainer.addEventListener('wheel', (event) => {
+                        event.preventDefault();
+                        const delta = event.deltaY || event.detail || event.wheelDelta;
+                        if (delta < 0) {
+                            zoomIn();
+                        } else {
+                            zoomOut();
+                        }
+                    }, { passive: false });
+
+                    // Button event listeners
+                    zoomInBtn.addEventListener('click', zoomIn);
+                    zoomOutBtn.addEventListener('click', zoomOut);
+                    resetZoomBtn.addEventListener('click', resetZoom);
+
+                    // Initialize Mermaid
                     if (typeof mermaid !== 'undefined') {
                         try {
                             console.log("Initializing Mermaid in exported HTML");
