@@ -149,6 +149,12 @@ main {
     padding: 1rem;
     overflow: auto;
     position: relative;
+    user-select: none;
+    cursor: grab;
+}
+
+.schema-container:active {
+    cursor: grabbing;
 }
 
 .view-controls {
@@ -181,6 +187,8 @@ main {
 #schema-diagram {
     transform-origin: top left;
     transition: transform 0.2s ease;
+    min-height: 100%;
+    min-width: 100%;
 }
 
 .mermaid {

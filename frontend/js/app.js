@@ -471,7 +471,46 @@ function setupMouseWheelZoom() {
     schemaContainer.removeEventListener('wheel', handleMouseWheel);
     schemaContainer.addEventListener('wheel', handleMouseWheel, { passive: false });
     
-    console.log("Mouse wheel zoom support set up");
+    // Setup mouse drag scrolling
+    let isDragging = false;
+    let startX, startY, scrollLeft, scrollTop;
+    
+    schemaContainer.style.cursor = 'grab';
+    
+    schemaContainer.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        schemaContainer.style.cursor = 'grabbing';
+        startX = e.pageX - schemaContainer.offsetLeft;
+        startY = e.pageY - schemaContainer.offsetTop;
+        scrollLeft = schemaContainer.scrollLeft;
+        scrollTop = schemaContainer.scrollTop;
+    });
+    
+    schemaContainer.addEventListener('mouseleave', () => {
+        isDragging = false;
+        schemaContainer.style.cursor = 'grab';
+    });
+    
+    schemaContainer.addEventListener('mouseup', () => {
+        isDragging = false;
+        schemaContainer.style.cursor = 'grab';
+    });
+    
+    schemaContainer.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        e.preventDefault();
+        const x = e.pageX - schemaContainer.offsetLeft;
+        const y = e.pageY - schemaContainer.offsetTop;
+        
+        const moveX = (x - startX);
+        const moveY = (y - startY);
+        
+        schemaContainer.scrollLeft = scrollLeft - moveX;
+        schemaContainer.scrollTop = scrollTop - moveY;
+    });
+    
+    console.log("Mouse wheel zoom and drag support set up");
 }
 
 function handleMouseWheel(event) {
