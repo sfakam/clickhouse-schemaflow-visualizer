@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -29,28 +30,11 @@ type Config struct {
 }
 
 var DatabasesData map[string]map[string]string
+var TableRelations []TableRelation
 
 type TableRelation struct {
 	DependsOnTable string
 	Table          string
-	Type           string
-}
-
-// TableRelations represents a list of table relations
-type TableRelations struct {
-	Relations []TableRelation
-}
-
-// Table represents a ClickHouse table
-type Table struct {
-	Name string `json:"name"`
-}
-
-// Column represents a column in a ClickHouse table
-type Column struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Position uint64 `json:"position"`
 }
 
 // ClickHouseClient represents a client for interacting with ClickHouse
@@ -125,9 +109,13 @@ type result struct {
 }
 
 func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
-	ctx := context.Background()
+	if TableRelations != nil && DatabasesData != nil {
+		log.Println("Using cached tables relations")
+		return TableRelations, nil
+	}
 
-	// Query to get all tables in the database
+	log.Println("Querying tables relations")
+	ctx := context.Background()
 	query := fmt.Sprintf("SELECT create_table_query, engine_full, engine, database, name FROM system.tables ORDER BY name")
 	rows, err := c.conn.Query(ctx, query)
 	if err != nil {
@@ -191,6 +179,8 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 		return nil, fmt.Errorf("error iterating table rows: %v", err)
 	}
 
+	TableRelations = tables
+
 	return tables, nil
 }
 
@@ -240,26 +230,37 @@ func (c *ClickHouseClient) GenerateMermaidSchema(dbName, tableName string) (stri
 	sb.WriteString(fmt.Sprintf("    %d[\"%s\"]\n\n", city.Hash32([]byte(table)), table))
 	sb.WriteString(fmt.Sprintf("    style %d fill:#FF6D00,stroke:#AA00FF,color:#FFFFFF\n\n", city.Hash32([]byte(table))))
 
-	getRelationsNext(&sb, tablesRelations, table)
-	getRelationsBack(&sb, tablesRelations, table)
+	seen := make(map[string]bool)
+	getRelationsNext(&sb, tablesRelations, table, &seen)
+	getRelationsBack(&sb, tablesRelations, table, &seen)
 
 	return sb.String(), nil
 }
 
-func getRelationsNext(sb *strings.Builder, tablesRelations []TableRelation, table string) {
+func getRelationsNext(sb *strings.Builder, tablesRelations []TableRelation, table string, seen *map[string]bool) {
 	for _, rel := range tablesRelations {
 		if rel.DependsOnTable == table && table != "" {
-			sb.WriteString(fmt.Sprintf("    %d[\"%s\"] --> %d[\"%s\"]\n", city.Hash32([]byte(rel.DependsOnTable)), rel.DependsOnTable, city.Hash32([]byte(rel.Table)), rel.Table))
-			getRelationsNext(sb, tablesRelations, rel.Table)
+			mermaidRow := fmt.Sprintf("    %d[\"%s\"] --> %d[\"%s\"]\n", city.Hash32([]byte(rel.DependsOnTable)), rel.DependsOnTable, city.Hash32([]byte(rel.Table)), rel.Table)
+
+			if !(*seen)[mermaidRow] {
+				(*seen)[mermaidRow] = true
+				sb.WriteString(mermaidRow)
+			}
+			getRelationsNext(sb, tablesRelations, rel.Table, seen)
 		}
 	}
 }
 
-func getRelationsBack(sb *strings.Builder, tablesRelations []TableRelation, table string) {
+func getRelationsBack(sb *strings.Builder, tablesRelations []TableRelation, table string, seen *map[string]bool) {
 	for _, rel := range tablesRelations {
 		if rel.Table == table && rel.DependsOnTable != "" {
-			sb.WriteString(fmt.Sprintf("    %d[\"%s\"] --> %d[\"%s\"]\n", city.Hash32([]byte(rel.DependsOnTable)), rel.DependsOnTable, city.Hash32([]byte(rel.Table)), rel.Table))
-			getRelationsBack(sb, tablesRelations, rel.DependsOnTable)
+			mermaidRow := fmt.Sprintf("    %d[\"%s\"] --> %d[\"%s\"]\n", city.Hash32([]byte(rel.DependsOnTable)), rel.DependsOnTable, city.Hash32([]byte(rel.Table)), rel.Table)
+
+			if !(*seen)[mermaidRow] {
+				(*seen)[mermaidRow] = true
+				sb.WriteString(mermaidRow)
+			}
+			getRelationsBack(sb, tablesRelations, rel.DependsOnTable, seen)
 		}
 	}
 }
