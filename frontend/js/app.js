@@ -435,7 +435,7 @@ ${exportSchema}
 }
 
 function zoomIn() {
-    currentZoomLevel = Math.min(currentZoomLevel + 0.1, 3);
+    currentZoomLevel = Math.min(currentZoomLevel + 0.1, 20);  // Increased max zoom from 3 to 10
     applyZoom();
 }
 
