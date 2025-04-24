@@ -44,6 +44,22 @@ A powerful web application for visualizing ClickHouse table relationships using 
 
 ## 🚀 Installation and Setup
 
+### Using GitHub Container Registry
+
+1. Pull the container from GitHub Container Registry:
+   ```bash
+   docker pull ghcr.io/fulgerx2007/clickhouse-schemaflow-visualizer:latest
+   ```
+
+2. Create a `.env` file with your ClickHouse connection details (see configuration example below)
+
+3. Run the container:
+   ```bash
+   docker run -p 8080:8080 --env-file .env ghcr.io/fulgerx2007/clickhouse-schemaflow-visualizer:latest
+   ```
+
+4. Access the web interface at http://localhost:8080
+
 ### Using Docker Compose (Recommended)
 
 1. Clone the repository:
@@ -167,4 +183,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
