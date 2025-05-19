@@ -120,6 +120,61 @@ main {
     color: #fff;
 }
 
+.legend-container {
+    padding: 1rem;
+    border-top: 1px solid #ddd;
+    font-size: 0.85rem;
+    background-color: #f8f9fa;
+}
+
+.legend-container h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: #495057;
+}
+
+.table-types-legend {
+    list-style: none;
+    padding: 0;
+}
+
+.table-types-legend li {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.4rem;
+    color: #555;
+}
+
+.table-types-legend li i {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+}
+
+.fa-database {
+    color: #4dabf7 !important;
+}
+
+.fa-circle-nodes {
+    color: #ff922b !important;
+}
+
+.fa-diagram-project {
+    color: #20c997 !important;
+}
+
+.fa-eye {
+    color: #e599f7 !important;
+}
+
+.fa-book {
+    color: #fab005 !important;
+}
+
 .options {
     padding: 1rem;
     border-top: 1px solid #ddd;
