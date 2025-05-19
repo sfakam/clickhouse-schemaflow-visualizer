@@ -53,8 +53,8 @@ func main() {
 	handler.RegisterRoutes(router)
 
 	// Serve static files from the frontend directory
-	router.Static("/static", "./frontend")
-	router.StaticFile("/", "./frontend/html/index.html")
+	router.Static("/static", "./static")
+	router.StaticFile("/", "./static/html/index.html")
 
 	// Get server address from environment or use default
 	serverAddr := getEnv("SERVER_ADDR", ":8080")
