@@ -5,13 +5,13 @@ FROM golang:1.23-alpine AS builder
 WORKDIR /app
 
 # Copy go.mod and go.sum files
-COPY backend/go.mod backend/go.sum ./
+COPY go.mod go.sum ./
 
 # Download dependencies
 RUN go mod download
 
 # Copy the source code
-COPY backend/ ./
+COPY . ./
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o clickhouse-schemaflow-visualizer .
