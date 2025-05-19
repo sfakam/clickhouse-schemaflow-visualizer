@@ -45,7 +45,6 @@ async function loadDatabases() {
         }
 
         databases = await response.json();
-        console.log('Received databases structure:', databases);
         renderDatabaseTree();
     } catch (error) {
         console.error('Error loading databases:', error);
@@ -76,27 +75,9 @@ function renderDatabaseTree() {
             tablesList.style.display = 'none';
 
             if (typeof dbContent === 'object' && !Array.isArray(dbContent) && !dbContent.tables) {
-                Object.keys(dbContent).forEach(tableName => {
-                    addTableToList(tablesList, dbName, tableName);
+                Object.entries(dbContent).forEach(([dbTable, tableName]) => {
+                    addTableToList(tablesList, dbName, dbTable, tableName);
                 });
-            } 
-            else if (dbContent.tables && Array.isArray(dbContent.tables)) {
-                dbContent.tables.forEach(table => {
-                    const tableName = typeof table === 'string' ? table : table.name;
-                    addTableToList(tablesList, dbName, tableName);
-                });
-            } else if (dbContent.tables && typeof dbContent.tables === 'object') {
-                // If tables is an object, iterate through its keys
-                Object.keys(dbContent.tables).forEach(tableName => {
-                    addTableToList(tablesList, dbName, tableName);
-                });
-            } else {
-                console.warn(`Handling structure for database ${dbName} as direct table list:`, dbContent);
-                if (typeof dbContent === 'object') {
-                    Object.keys(dbContent).forEach(key => {
-                        addTableToList(tablesList, dbName, key);
-                    });
-                }
             }
 
             dbItem.appendChild(tablesList);
@@ -157,13 +138,13 @@ function renderDatabaseTree() {
     }
 }
 
-function addTableToList(tablesList, dbName, tableName) {
+function addTableToList(tablesList, dbName, dbTable, showTableName) {
     const tableItem = document.createElement('li');
     tableItem.className = 'table';
-    tableItem.textContent = tableName;
+    tableItem.innerHTML = showTableName;
     tableItem.dataset.database = dbName;
-    tableItem.dataset.table = tableName;
-    tableItem.title = tableName;
+    tableItem.dataset.table = dbTable;
+    tableItem.title = dbTable;
 
     tableItem.addEventListener('click', () => selectTable(tableItem));
 

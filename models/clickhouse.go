@@ -35,6 +35,7 @@ var TableRelations []TableRelation
 type TableRelation struct {
 	DependsOnTable string
 	Table          string
+	Icon           string
 }
 
 // ClickHouseClient represents a client for interacting with ClickHouse
@@ -131,46 +132,49 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 			return nil, fmt.Errorf("failed to scan table data: %v", err)
 		}
 
-		if allowedDatabase(database) {
-			if DatabasesData == nil {
-				DatabasesData = make(map[string]map[string]string)
-			}
+		if !allowedDatabase(database) {
+			continue
+		}
 
-			if DatabasesData[database] == nil {
-				DatabasesData[database] = make(map[string]string)
-			}
+		if DatabasesData == nil {
+			DatabasesData = make(map[string]map[string]string)
+		}
 
-			DatabasesData[database][table] = table
+		if DatabasesData[database] == nil {
+			DatabasesData[database] = make(map[string]string)
 		}
 
 		// Extract the relation from the creation query
-		if strings.HasPrefix(res.createQuery, "CREATE TABLE") && res.engine != "Distributed" {
+		if strings.HasPrefix(res.createQuery, "CREATE TABLE") && res.engine != "Distributed" { // Local Table
 			queryParts := strings.Split(res.createQuery, " ")
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
+				DatabasesData[database][table] = `<i class="fa-solid fa-database"></i> ` + table
 
-				tables = append(tables, TableRelation{Table: tableName})
+				tables = append(tables, TableRelation{Table: tableName, Icon: `<i class="fa-solid fa-database"></i>`})
 			}
-		} else if strings.HasPrefix(res.createQuery, "CREATE TABLE") && res.engine == "Distributed" {
+		} else if strings.HasPrefix(res.createQuery, "CREATE TABLE") && res.engine == "Distributed" { // Distributed Table
 			queryParts := strings.Split(res.createQuery, " ")
 			queryParts2 := strings.Split(res.engineFull, "'")
+			DatabasesData[database][table] = `<i class="fa-solid fa-diagram-project"></i> ` + table
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
 				dstTable := queryParts2[3] + "." + queryParts2[5]
 
-				tables = append(tables, TableRelation{DependsOnTable: tableName, Table: dstTable})
+				tables = append(tables, TableRelation{DependsOnTable: tableName, Table: dstTable, Icon: `<i class="fa-solid fa-diagram-project"></i>`})
 			}
-		} else if strings.HasPrefix(res.createQuery, "CREATE MATERIALIZED VIEW") {
+		} else if strings.HasPrefix(res.createQuery, "CREATE MATERIALIZED VIEW") { // Materialized View
 			queryParts1 := strings.Split(res.createQuery, " ")
 			queryParts2 := strings.Split(res.createQuery, "FROM ")
 			queryParts3 := strings.Split(queryParts2[1], " ")
+			DatabasesData[database][table] = `<i class="fa-solid fa-eye"></i> ` + table
 			if len(queryParts1) > 3 {
 				mvTable := queryParts1[3]
 				dstTable := queryParts1[5]
 				srcTable := queryParts3[0]
 
-				tables = append(tables, TableRelation{DependsOnTable: srcTable, Table: mvTable})
-				tables = append(tables, TableRelation{DependsOnTable: mvTable, Table: dstTable})
+				tables = append(tables, TableRelation{DependsOnTable: srcTable, Table: mvTable, Icon: `<i class="fa-solid fa-eye"></i>`})
+				tables = append(tables, TableRelation{DependsOnTable: mvTable, Table: dstTable, Icon: `<i class="fa-solid fa-eye"></i>`})
 			}
 		}
 	}
