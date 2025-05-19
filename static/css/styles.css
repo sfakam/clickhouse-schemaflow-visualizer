@@ -46,7 +46,7 @@ main {
 }
 
 .sidebar-header {
-    padding: 1rem;
+    padding: 0.95rem;
     border-bottom: 1px solid #ddd;
     display: flex;
     justify-content: space-between;
@@ -133,7 +133,7 @@ main {
 }
 
 .toolbar {
-    padding: 1rem;
+    padding: 0.7rem;
     border-bottom: 1px solid #ddd;
     display: flex;
     justify-content: space-between;
@@ -173,8 +173,8 @@ main {
 
 .view-controls {
     position: fixed;
-    top: 160px;
-    right: 30px;
+    top: 130px;
+    right: 0;
     z-index: 1000;
     display: flex;
     gap: 5px;
