@@ -35,6 +35,22 @@ document.addEventListener('DOMContentLoaded', () => {
     zoomOutBtn.addEventListener('click', zoomOut);
     resetZoomBtn.addEventListener('click', resetZoom);
     
+    // Setup collapsible Table Types section
+    const collapsibleHeader = document.querySelector('.collapsible-header');
+    if (collapsibleHeader) {
+        collapsibleHeader.addEventListener('click', () => {
+            collapsibleHeader.classList.toggle('collapsed');
+            // Save collapsed state to localStorage
+            const isCollapsed = collapsibleHeader.classList.contains('collapsed');
+            localStorage.setItem('tableTypesCollapsed', isCollapsed);
+        });
+        
+        // Restore collapsed state from localStorage
+        const savedCollapsedState = localStorage.getItem('tableTypesCollapsed');
+        if (savedCollapsedState === 'true') {
+            collapsibleHeader.classList.add('collapsed');
+        }
+    }
 });
 
 async function loadDatabases() {

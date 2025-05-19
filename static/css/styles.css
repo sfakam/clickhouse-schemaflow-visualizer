@@ -133,6 +133,31 @@ main {
     color: #495057;
 }
 
+.collapsible-header {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+}
+
+.collapsible-header:hover {
+    color: #007bff;
+}
+
+.collapse-icon {
+    font-size: 0.8rem;
+    transition: transform 0.3s ease;
+}
+
+.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.collapsed + .table-types-legend {
+    display: none;
+}
+
 .table-types-legend {
     list-style: none;
     padding: 0;
