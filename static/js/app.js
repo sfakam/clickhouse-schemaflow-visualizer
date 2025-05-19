@@ -62,7 +62,12 @@ function renderDatabaseTree() {
 
             const dbSpan = document.createElement('span');
             dbSpan.className = 'database';
+            
+            // Get table count for this database
+            const tableCount = typeof dbContent === 'object' && !Array.isArray(dbContent) ? Object.keys(dbContent).length : 0;
             dbSpan.textContent = dbName;
+            dbSpan.dataset.count = tableCount;
+            
             dbSpan.addEventListener('click', () => toggleDatabase(dbItem));
 
             dbItem.appendChild(dbSpan);
@@ -102,7 +107,21 @@ function renderDatabaseTree() {
             const dbItem = document.createElement('li');
             const dbSpan = document.createElement('span');
             dbSpan.className = 'database';
+            
+            // Count tables in this database
+            let tableCount = 0;
+            if (db.tables) {
+                if (Array.isArray(db.tables)) {
+                    tableCount = db.tables.length;
+                } else if (typeof db.tables === 'object') {
+                    tableCount = Object.keys(db.tables).length;
+                }
+            } else if (typeof db === 'object') {
+                tableCount = Object.keys(db).filter(key => key !== 'name').length;
+            }
+            
             dbSpan.textContent = db.name || db.toString();
+            dbSpan.dataset.count = tableCount;
             dbSpan.addEventListener('click', () => toggleDatabase(dbItem));
             dbItem.appendChild(dbSpan);
 
