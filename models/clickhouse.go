@@ -117,7 +117,7 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 
 	log.Println("Querying tables relations")
 	ctx := context.Background()
-	query := fmt.Sprintf("SELECT create_table_query, engine_full, engine, database, name FROM system.tables ORDER BY name")
+	query := fmt.Sprintf("SELECT create_table_query, engine_full, engine, database, name, loading_dependencies_table FROM system.tables ORDER BY name")
 	rows, err := c.conn.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tables: %v", err)
@@ -128,7 +128,8 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 	for rows.Next() {
 		res := result{}
 		database, table := "", ""
-		if err := rows.Scan(&res.createQuery, &res.engineFull, &res.engine, &database, &table); err != nil {
+		var loadingDependenciesTable []string
+		if err := rows.Scan(&res.createQuery, &res.engineFull, &res.engine, &database, &table, &loadingDependenciesTable); err != nil {
 			return nil, fmt.Errorf("failed to scan table data: %v", err)
 		}
 
@@ -145,7 +146,7 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 		}
 
 		// Extract the relation from the creation query
-		if strings.HasPrefix(res.createQuery, "CREATE TABLE") && res.engine != "Distributed" { // Local Table
+		if res.engine == "MergeTree" { // Local Table
 			queryParts := strings.Split(res.createQuery, " ")
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
@@ -153,7 +154,23 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 
 				tables = append(tables, TableRelation{Table: tableName, Icon: `<i class="fa-solid fa-database"></i>`})
 			}
-		} else if strings.HasPrefix(res.createQuery, "CREATE TABLE") && res.engine == "Distributed" { // Distributed Table
+		} else if strings.HasPrefix(res.engine, "Replicated") { // Distributed Table
+			queryParts := strings.Split(res.createQuery, " ")
+			DatabasesData[database][table] = `<i class="fa-solid fa-circle-nodes"></i> ` + table
+			if len(queryParts) > 2 {
+				tableName := queryParts[2]
+
+				tables = append(tables, TableRelation{Table: tableName, Icon: `<i class="fa-solid fa-circle-nodes"></i>`})
+			}
+		} else if strings.HasPrefix(res.engine, "Dictionary") { // Distributed Table
+			queryParts := strings.Split(res.createQuery, " ")
+			DatabasesData[database][table] = `<i class="fa-solid fa-book"></i> ` + table
+			if len(queryParts) > 2 {
+				tableName := queryParts[2]
+
+				tables = append(tables, TableRelation{DependsOnTable: loadingDependenciesTable[0], Table: tableName, Icon: `<i class="fa-solid fa-book"></i>`})
+			}
+		} else if res.engine == "Distributed" { // Distributed Table
 			queryParts := strings.Split(res.createQuery, " ")
 			queryParts2 := strings.Split(res.engineFull, "'")
 			DatabasesData[database][table] = `<i class="fa-solid fa-diagram-project"></i> ` + table
@@ -163,7 +180,7 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 
 				tables = append(tables, TableRelation{DependsOnTable: tableName, Table: dstTable, Icon: `<i class="fa-solid fa-diagram-project"></i>`})
 			}
-		} else if strings.HasPrefix(res.createQuery, "CREATE MATERIALIZED VIEW") { // Materialized View
+		} else if res.engine == "MaterializedView" { // Materialized View
 			queryParts1 := strings.Split(res.createQuery, " ")
 			queryParts2 := strings.Split(res.createQuery, "FROM ")
 			queryParts3 := strings.Split(queryParts2[1], " ")
