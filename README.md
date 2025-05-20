@@ -14,11 +14,11 @@ A powerful web application for visualizing ClickHouse table relationships using 
 
 <div align="center">
 
-![Main window](static/img/screenshot_1.png)
+![Main window](assets/screenshots/screenshot_1.png)
 
-![Table relationships](static/img/screenshot_2.png)
+![Table relationships](assets/screenshots/screenshot_2.png)
 
-![Table relationships](static/img/screenshot_3.png)
+![Table relationships](assets/screenshots/screenshot_3.png)
 
 </div>
 
@@ -26,7 +26,9 @@ A powerful web application for visualizing ClickHouse table relationships using 
 
 - 🔍 Browse ClickHouse databases and tables with an intuitive interface
 - 📊 Visualize table relationships with Mermaid.js diagrams
+- 🎨 Color-coded diagram blocks matching table types for better visualization
 - ↔️ View direction of data flow between tables
+- 📂 Collapsible table types legend for a cleaner interface
 - 💾 Export diagrams as standalone HTML files
 - 🔒 Secure connection to ClickHouse with TLS support
 - 📱 Responsive web interface for all devices
@@ -135,13 +137,16 @@ A powerful web application for visualizing ClickHouse table relationships using 
 ## 🔧 How It Works
 
 The application analyzes ClickHouse table structures by querying system tables:
-- `system.tables` to get tables in each database
+- `system.tables` to get tables in each database and determine their types
 
 Relationships between tables are determined based on column names:
 - Direction of data flow is determined automatically for:
   - distributed tables
   - materialized views
-  - tables
+  - replicated tables
+  - regular tables
+  - dictionaries
+
 
 ## 👨‍💻 Development
 
@@ -149,18 +154,28 @@ Relationships between tables are determined based on column names:
 
 ```
 clickhouse-schemaflow-visualizer/
-├── backend/
-│   ├── api/         # API handlers
-│   ├── config/      # Configuration handling
-│   ├── models/      # Data models and ClickHouse client
-│   └── main.go      # Application entry point
-├── frontend/
+├── api/             # API handlers
+│   └── handlers.go  # API endpoint implementations
+├── assets/          # Project assets
+│   └── screenshots/ # Screenshots for documentation
+├── config/          # Configuration handling
+│   └── config.go    # Environment configuration loader
+├── models/          # Data models and ClickHouse client
+│   └── clickhouse.go # ClickHouse connection and schema handling
+├── static/          # Frontend static files
 │   ├── css/         # CSS styles
+│   │   └── styles.css # Main stylesheet
 │   ├── html/        # HTML templates
+│   │   └── index.html # Main application page
+│   ├── img/         # Images and icons
 │   └── js/          # JavaScript code
-├── .env             # Environment configuration
-├── Dockerfile       # Docker build instructions
+│       └── app.js   # Main application logic
+├── .env.example     # Example environment configuration
 ├── docker-compose.yml # Docker Compose configuration
+├── Dockerfile       # Docker build instructions
+├── go.mod           # Go module dependencies
+├── go.sum           # Go module checksums
+├── main.go          # Application entry point
 └── README.md        # Documentation
 ```
 
