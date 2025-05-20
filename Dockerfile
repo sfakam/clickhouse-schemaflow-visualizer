@@ -29,7 +29,7 @@ WORKDIR /app
 COPY --from=builder /app/clickhouse-schemaflow-visualizer .
 
 # Copy the frontend files
-COPY frontend/ ./frontend/
+COPY static/ ./static/
 
 # Expose the port
 EXPOSE 8080
