@@ -49,27 +49,17 @@ func (h *Handler) GetTableSchema(c *gin.Context) {
 	table := c.Param("table")
 
 	if database == "" || table == "" {
-		c.JSON(
-			http.StatusBadRequest, gin.H{
-				"error": "database and table parameters are required",
-			},
-		)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "database and table parameters are required"})
+
 		return
 	}
 
 	schema, err := h.clickhouse.GenerateMermaidSchema(database, table)
 	if err != nil {
-		c.JSON(
-			http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			},
-		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+
 		return
 	}
 
-	c.JSON(
-		http.StatusOK, gin.H{
-			"schema": schema,
-		},
-	)
+	c.JSON(http.StatusOK, gin.H{"schema": schema})
 }

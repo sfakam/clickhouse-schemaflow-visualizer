@@ -35,6 +35,7 @@ var TableRelations []TableRelation
 type TableRelation struct {
 	DependsOnTable string
 	Table          string
+	Icon           string
 }
 
 // ClickHouseClient represents a client for interacting with ClickHouse
@@ -116,7 +117,7 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 
 	log.Println("Querying tables relations")
 	ctx := context.Background()
-	query := fmt.Sprintf("SELECT create_table_query, engine_full, engine, database, name FROM system.tables ORDER BY name")
+	query := fmt.Sprintf("SELECT create_table_query, engine_full, engine, database, name, loading_dependencies_table FROM system.tables ORDER BY name")
 	rows, err := c.conn.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tables: %v", err)
@@ -127,50 +128,70 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 	for rows.Next() {
 		res := result{}
 		database, table := "", ""
-		if err := rows.Scan(&res.createQuery, &res.engineFull, &res.engine, &database, &table); err != nil {
+		var loadingDependenciesTable []string
+		if err := rows.Scan(&res.createQuery, &res.engineFull, &res.engine, &database, &table, &loadingDependenciesTable); err != nil {
 			return nil, fmt.Errorf("failed to scan table data: %v", err)
 		}
 
-		if allowedDatabase(database) {
-			if DatabasesData == nil {
-				DatabasesData = make(map[string]map[string]string)
-			}
+		if !allowedDatabase(database) {
+			continue
+		}
 
-			if DatabasesData[database] == nil {
-				DatabasesData[database] = make(map[string]string)
-			}
+		if DatabasesData == nil {
+			DatabasesData = make(map[string]map[string]string)
+		}
 
-			DatabasesData[database][table] = table
+		if DatabasesData[database] == nil {
+			DatabasesData[database] = make(map[string]string)
 		}
 
 		// Extract the relation from the creation query
-		if strings.HasPrefix(res.createQuery, "CREATE TABLE") && res.engine != "Distributed" {
+		if res.engine == "MergeTree" { // Local Table
 			queryParts := strings.Split(res.createQuery, " ")
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
+				DatabasesData[database][table] = `<i class="fa-solid fa-database"></i> ` + table
 
-				tables = append(tables, TableRelation{Table: tableName})
+				tables = append(tables, TableRelation{Table: tableName, Icon: `<i class="fa-solid fa-database"></i>`})
 			}
-		} else if strings.HasPrefix(res.createQuery, "CREATE TABLE") && res.engine == "Distributed" {
+		} else if strings.HasPrefix(res.engine, "Replicated") { // Distributed Table
+			queryParts := strings.Split(res.createQuery, " ")
+			DatabasesData[database][table] = `<i class="fa-solid fa-circle-nodes"></i> ` + table
+			if len(queryParts) > 2 {
+				tableName := queryParts[2]
+
+				tables = append(tables, TableRelation{Table: tableName, Icon: `<i class="fa-solid fa-circle-nodes"></i>`})
+			}
+		} else if strings.HasPrefix(res.engine, "Dictionary") { // Distributed Table
+			queryParts := strings.Split(res.createQuery, " ")
+			DatabasesData[database][table] = `<i class="fa-solid fa-book"></i> ` + table
+			if len(queryParts) > 2 {
+				tableName := queryParts[2]
+
+				tables = append(tables, TableRelation{DependsOnTable: loadingDependenciesTable[0], Table: tableName, Icon: `<i class="fa-solid fa-book"></i>`})
+			}
+		} else if res.engine == "Distributed" { // Distributed Table
 			queryParts := strings.Split(res.createQuery, " ")
 			queryParts2 := strings.Split(res.engineFull, "'")
+			DatabasesData[database][table] = `<i class="fa-solid fa-diagram-project"></i> ` + table
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
 				dstTable := queryParts2[3] + "." + queryParts2[5]
 
-				tables = append(tables, TableRelation{DependsOnTable: tableName, Table: dstTable})
+				tables = append(tables, TableRelation{DependsOnTable: tableName, Table: dstTable, Icon: `<i class="fa-solid fa-diagram-project"></i>`})
 			}
-		} else if strings.HasPrefix(res.createQuery, "CREATE MATERIALIZED VIEW") {
+		} else if res.engine == "MaterializedView" { // Materialized View
 			queryParts1 := strings.Split(res.createQuery, " ")
 			queryParts2 := strings.Split(res.createQuery, "FROM ")
 			queryParts3 := strings.Split(queryParts2[1], " ")
+			DatabasesData[database][table] = `<i class="fa-solid fa-eye"></i> ` + table
 			if len(queryParts1) > 3 {
 				mvTable := queryParts1[3]
 				dstTable := queryParts1[5]
 				srcTable := queryParts3[0]
 
-				tables = append(tables, TableRelation{DependsOnTable: srcTable, Table: mvTable})
-				tables = append(tables, TableRelation{DependsOnTable: mvTable, Table: dstTable})
+				tables = append(tables, TableRelation{DependsOnTable: srcTable, Table: mvTable, Icon: `<i class="fa-solid fa-eye"></i>`})
+				tables = append(tables, TableRelation{DependsOnTable: mvTable, Table: dstTable, Icon: `<i class="fa-solid fa-eye"></i>`})
 			}
 		}
 	}

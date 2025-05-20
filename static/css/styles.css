@@ -6,7 +6,6 @@
 
 body {
     font-family: Arial, sans-serif;
-    line-height: 1.6;
     color: #333;
     background-color: #f4f4f4;
     display: flex;
@@ -27,7 +26,6 @@ header h1 {
 
 main {
     flex: 1;
-    padding: 1rem;
 }
 
 .container {
@@ -48,7 +46,7 @@ main {
 }
 
 .sidebar-header {
-    padding: 1rem;
+    padding: 0.95rem;
     border-bottom: 1px solid #ddd;
     display: flex;
     justify-content: space-between;
@@ -86,6 +84,20 @@ main {
     font-weight: bold;
     cursor: pointer;
     padding: 0.3rem 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.tree-view .database::after {
+    content: attr(data-count);
+    font-size: 12px;
+    font-weight: normal;
+    color: #6c757d;
+    background-color: #e9ecef;
+    border-radius: 10px;
+    padding: 2px 8px;
+    margin-left: 8px;
 }
 
 .tree-view .table {
@@ -95,6 +107,8 @@ main {
     margin-left: 15px;
     cursor: pointer;
     padding: 0 5px;
+    white-space: nowrap;
+    line-height: 1.5;
 }
 
 .tree-view .table:hover {
@@ -104,6 +118,86 @@ main {
 .tree-view .table.selected {
     background-color: #007bff;
     color: #fff;
+}
+
+.legend-container {
+    padding: 1rem;
+    border-top: 1px solid #ddd;
+    font-size: 0.85rem;
+    background-color: #f8f9fa;
+}
+
+.legend-container h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: #495057;
+}
+
+.collapsible-header {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+}
+
+.collapsible-header:hover {
+    color: #007bff;
+}
+
+.collapse-icon {
+    font-size: 0.8rem;
+    transition: transform 0.3s ease;
+}
+
+.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.collapsed + .table-types-legend {
+    display: none;
+}
+
+.table-types-legend {
+    list-style: none;
+    padding: 0;
+}
+
+.table-types-legend li {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.4rem;
+    color: #555;
+}
+
+.table-types-legend li i {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+}
+
+.fa-database {
+    color: #4dabf7 !important;
+}
+
+.fa-circle-nodes {
+    color: #ff922b !important;
+}
+
+.fa-diagram-project {
+    color: #20c997 !important;
+}
+
+.fa-eye {
+    color: #e599f7 !important;
+}
+
+.fa-book {
+    color: #fab005 !important;
 }
 
 .options {
@@ -119,7 +213,7 @@ main {
 }
 
 .toolbar {
-    padding: 1rem;
+    padding: 0.7rem;
     border-bottom: 1px solid #ddd;
     display: flex;
     justify-content: space-between;
@@ -159,8 +253,8 @@ main {
 
 .view-controls {
     position: fixed;
-    top: 120px;
-    right: 30px;
+    top: 130px;
+    right: 0;
     z-index: 1000;
     display: flex;
     gap: 5px;

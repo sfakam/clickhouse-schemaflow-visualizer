@@ -35,6 +35,22 @@ document.addEventListener('DOMContentLoaded', () => {
     zoomOutBtn.addEventListener('click', zoomOut);
     resetZoomBtn.addEventListener('click', resetZoom);
     
+    // Setup collapsible Table Types section
+    const collapsibleHeader = document.querySelector('.collapsible-header');
+    if (collapsibleHeader) {
+        collapsibleHeader.addEventListener('click', () => {
+            collapsibleHeader.classList.toggle('collapsed');
+            // Save collapsed state to localStorage
+            const isCollapsed = collapsibleHeader.classList.contains('collapsed');
+            localStorage.setItem('tableTypesCollapsed', isCollapsed);
+        });
+        
+        // Restore collapsed state from localStorage
+        const savedCollapsedState = localStorage.getItem('tableTypesCollapsed');
+        if (savedCollapsedState === 'true') {
+            collapsibleHeader.classList.add('collapsed');
+        }
+    }
 });
 
 async function loadDatabases() {
@@ -45,7 +61,6 @@ async function loadDatabases() {
         }
 
         databases = await response.json();
-        console.log('Received databases structure:', databases);
         renderDatabaseTree();
     } catch (error) {
         console.error('Error loading databases:', error);
@@ -62,7 +77,12 @@ function renderDatabaseTree() {
 
             const dbSpan = document.createElement('span');
             dbSpan.className = 'database';
+            
+            // Get table count for this database
+            const tableCount = typeof dbContent === 'object' && !Array.isArray(dbContent) ? Object.keys(dbContent).length : 0;
             dbSpan.textContent = dbName;
+            dbSpan.dataset.count = tableCount;
+            
             dbSpan.addEventListener('click', () => toggleDatabase(dbItem));
 
             dbItem.appendChild(dbSpan);
@@ -71,27 +91,9 @@ function renderDatabaseTree() {
             tablesList.style.display = 'none';
 
             if (typeof dbContent === 'object' && !Array.isArray(dbContent) && !dbContent.tables) {
-                Object.keys(dbContent).forEach(tableName => {
-                    addTableToList(tablesList, dbName, tableName);
+                Object.entries(dbContent).forEach(([dbTable, tableName]) => {
+                    addTableToList(tablesList, dbName, dbTable, tableName);
                 });
-            } 
-            else if (dbContent.tables && Array.isArray(dbContent.tables)) {
-                dbContent.tables.forEach(table => {
-                    const tableName = typeof table === 'string' ? table : table.name;
-                    addTableToList(tablesList, dbName, tableName);
-                });
-            } else if (dbContent.tables && typeof dbContent.tables === 'object') {
-                // If tables is an object, iterate through its keys
-                Object.keys(dbContent.tables).forEach(tableName => {
-                    addTableToList(tablesList, dbName, tableName);
-                });
-            } else {
-                console.warn(`Handling structure for database ${dbName} as direct table list:`, dbContent);
-                if (typeof dbContent === 'object') {
-                    Object.keys(dbContent).forEach(key => {
-                        addTableToList(tablesList, dbName, key);
-                    });
-                }
             }
 
             dbItem.appendChild(tablesList);
@@ -102,7 +104,21 @@ function renderDatabaseTree() {
             const dbItem = document.createElement('li');
             const dbSpan = document.createElement('span');
             dbSpan.className = 'database';
+            
+            // Count tables in this database
+            let tableCount = 0;
+            if (db.tables) {
+                if (Array.isArray(db.tables)) {
+                    tableCount = db.tables.length;
+                } else if (typeof db.tables === 'object') {
+                    tableCount = Object.keys(db.tables).length;
+                }
+            } else if (typeof db === 'object') {
+                tableCount = Object.keys(db).filter(key => key !== 'name').length;
+            }
+            
             dbSpan.textContent = db.name || db.toString();
+            dbSpan.dataset.count = tableCount;
             dbSpan.addEventListener('click', () => toggleDatabase(dbItem));
             dbItem.appendChild(dbSpan);
 
@@ -138,13 +154,13 @@ function renderDatabaseTree() {
     }
 }
 
-function addTableToList(tablesList, dbName, tableName) {
+function addTableToList(tablesList, dbName, dbTable, showTableName) {
     const tableItem = document.createElement('li');
     tableItem.className = 'table';
-    tableItem.textContent = tableName;
+    tableItem.innerHTML = showTableName;
     tableItem.dataset.database = dbName;
-    tableItem.dataset.table = tableName;
-    tableItem.title = tableName;
+    tableItem.dataset.table = dbTable;
+    tableItem.title = dbTable;
 
     tableItem.addEventListener('click', () => selectTable(tableItem));
 
