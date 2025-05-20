@@ -2,7 +2,7 @@
 
 # ClickHouse Schema Flow Visualizer
 
-![Logo](static/img/logo.png)
+<img src="static/img/logo_256x256.png" alt="Logo">
 
 A powerful web application for visualizing ClickHouse table relationships using Mermaid.js diagrams.
 
