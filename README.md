@@ -26,7 +26,7 @@ A powerful web application for visualizing ClickHouse table relationships using 
 
 - 🔍 Browse ClickHouse databases and tables with an intuitive interface
 - 📊 Visualize table relationships with Mermaid.js diagrams
-- 🎨 Color-coded diagram blocks matching table types for better visualization
+- 🎨 Color-coded icons matching table types for better visualization
 - ↔️ View direction of data flow between tables
 - 📂 Collapsible table types legend for a cleaner interface
 - 💾 Export diagrams as standalone HTML files
