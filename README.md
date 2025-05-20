@@ -2,7 +2,7 @@
 
 # ClickHouse Schema Flow Visualizer
 
-![Logo](frontend/img/logo.png)
+![Logo](static/img/logo.png)
 
 A powerful web application for visualizing ClickHouse table relationships using Mermaid.js diagrams.
 
@@ -14,11 +14,11 @@ A powerful web application for visualizing ClickHouse table relationships using 
 
 <div align="center">
 
-![Main window](frontend/img/screenshot_1.png)
+![Main window](static/img/screenshot_1.png)
 
-![Table relationships](frontend/img/screenshot_2.png)
+![Table relationships](static/img/screenshot_2.png)
 
-![Table relationships](frontend/img/screenshot_3.png)
+![Table relationships](static/img/screenshot_3.png)
 
 </div>
 
