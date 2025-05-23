@@ -305,3 +305,7 @@ main {
         border-bottom: 1px solid #ddd;
     }
 }
+
+small {
+    font-size: 75%;
+}
