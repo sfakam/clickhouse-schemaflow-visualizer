@@ -1,31 +1,27 @@
-# This is an example .goreleaser.yml file with some sensible defaults.
-# Make sure to check the documentation at https://goreleaser.com
-
-# The lines below are called `modelines`. See `:help modeline`
-# Feel free to remove those if you don't want/need to use them.
-# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+# GoReleaser configuration for clickhouse-schemaflow-visualizer
+# See https://goreleaser.com for documentation
 
 version: 2
 
 before:
   hooks:
-    # You may remove this if you don't use go modules.
     - go mod tidy
-    # you may remove this if you don't need go generate
     - go generate ./...
 
 builds:
-  - env:
+  - binary: clickhouse-schemaflow-visualizer
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
       - windows
       - darwin
+    goarch:
+      - amd64
+      - arm64
 
 archives:
-  - formats: [tar.gz]
-    # this name template makes the OS and Arch compatible with the results of `uname`.
+  - format: tar.gz
     name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
@@ -33,112 +29,51 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    # use zip for windows archives
     format_overrides:
       - goos: windows
-        formats: [zip]
+        format: zip
+    files:
+      - README.md
+      - LICENSE*
+      - static/**/*
+      - .env.example
 
 nfpms:
-  # Configure DEB and RPM packages
   - id: packages
     package_name: clickhouse-schemaflow-visualizer
-    
     vendor: ChView2
     homepage: https://github.com/FulgerX2007/clickhouse-schemaflow-visualizer
     maintainer: ChView2 Team <maintainer@example.com>
-    description: |-
-      ChView2 is a web-based ClickHouse database viewer and query interface.
-      It provides a modern, user-friendly way to interact with ClickHouse databases,
-      visualize data, and manage queries.
+    description: Web-based ClickHouse database viewer and query interface
     license: MIT
-    
-    # Supported formats
     formats:
-      - apk
       - deb
       - rpm
-      - archlinux
-    
-    # Dependencies
+      - apk
     dependencies:
       - ca-certificates
-    
-    # Package contents
+    scripts:
+      preinstall: scripts/preinstall.sh
+      postinstall: scripts/postinstall.sh
+      preremove: scripts/preremove.sh
+      postremove: scripts/postremove.sh
     contents:
-      # Binary
-      - src: ./clickhouse-schemaflow-visualizer
-        dst: /usr/bin/clickhouse-schemaflow-visualizer
-        file_info:
-          mode: 0755
-      
-      # Static assets
-      - src: ./static/**/*
-        dst: /usr/share/clickhouse-schemaflow-visualizer/static/
-        type: "tree"
-      
-      # Configuration
-      - src: ./.env.example
-        dst: /etc/clickhouse-schemaflow-visualizer/config.env.example
-        type: config|noreplace
-      
-      # Documentation
-      - src: ./README.md
-        dst: /usr/share/doc/clickhouse-schemaflow-visualizer/README.md
+      - src: static
+        dst: /usr/share/clickhouse-schemaflow-visualizer/static
+        type: tree
         file_info:
           mode: 0644
-    
-    # RPM specific
+      - src: .env.example
+        dst: /etc/clickhouse-schemaflow-visualizer/config.env.example
+        type: config|noreplace
+        file_info:
+          mode: 0644
     rpm:
       group: Applications/Databases
       summary: Web-based ClickHouse database viewer
-      
-    # DEB specific  
     deb:
       lintian_overrides:
         - statically-linked-binary
-        - changelog-file-missing-in-native-package
-
-# AUR package for Arch Linux
-aurs:
-  - name: clickhouse-schemaflow-visualizer-bin
-    homepage: https://github.com/FulgerX2007/clickhouse-schemaflow-visualizer
-    description: Web-based ClickHouse database viewer and query interface
-    maintainers:
-      - 'ChView2 Team <maintainer@example.com>'
-    license: MIT
-    private_key: '{{ .Env.AUR_KEY }}'
-    git_url: 'ssh://aur@aur.archlinux.org/clickhouse-schemaflow-visualizer-bin.git'
-    depends:
-      - ca-certificates
-    package: |-
-      # bin
-      install -Dm755 "./clickhouse-schemaflow-visualizer" "${pkgdir}/usr/bin/clickhouse-schemaflow-visualizer"
-      
-      # static assets
-      install -dm755 "${pkgdir}/usr/share/clickhouse-schemaflow-visualizer"
-      cp -r "./static" "${pkgdir}/usr/share/clickhouse-schemaflow-visualizer/"
-      
-      # config
-      install -Dm644 "./.env.example" "${pkgdir}/etc/clickhouse-schemaflow-visualizer/config.env.example"
-      
-      # docs
-      install -Dm644 "./README.md" "${pkgdir}/usr/share/doc/clickhouse-schemaflow-visualizer/README.md"
-
-# Docker images
-dockers:
-  - image_templates:
-      - "ghcr.io/fulgerx2007/clickhouse-schemaflow-visualizer:{{ .Tag }}"
-      - "ghcr.io/fulgerx2007/clickhouse-schemaflow-visualizer:v{{ .Major }}"
-      - "ghcr.io/fulgerx2007/clickhouse-schemaflow-visualizer:v{{ .Major }}.{{ .Minor }}"
-      - "ghcr.io/fulgerx2007/clickhouse-schemaflow-visualizer:latest"
-    dockerfile: Dockerfile
-    build_flag_templates:
-      - "--pull"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--platform=linux/amd64"
 
 changelog:
   sort: asc
@@ -148,8 +83,6 @@ changelog:
       - "^test:"
 
 release:
-  footer: >-
-
+  footer: |
     ---
-
     Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
