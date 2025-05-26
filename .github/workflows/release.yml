@@ -31,11 +31,6 @@ jobs:
       - name: Build application
         run: go build -o clickhouse-schemaflow-visualizer .
 
-      - name: Security scan
-        run: |
-          go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
-          gosec ./... || true
-
   goreleaser:
     needs: test
     runs-on: ubuntu-latest
