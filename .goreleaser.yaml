@@ -1,7 +1,5 @@
 # GoReleaser configuration for clickhouse-schemaflow-visualizer
-# See https://goreleaser.com for documentation
-
-version: 2
+# Using version 1 format for compatibility with GoReleaser v1.x
 
 before:
   hooks:
