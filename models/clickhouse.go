@@ -31,11 +31,21 @@ type Config struct {
 
 var DatabasesData map[string]map[string]string
 var TableRelations []TableRelation
+var TableMetadata map[string]TableInfo
 
 type TableRelation struct {
 	DependsOnTable string
 	Table          string
 	Icon           string
+}
+
+type TableInfo struct {
+	Name       string
+	Database   string
+	TotalRows  *uint64
+	TotalBytes *uint64
+	Engine     string
+	Icon       string
 }
 
 // ClickHouseClient represents a client for interacting with ClickHouse
@@ -107,17 +117,64 @@ type result struct {
 	createQuery string
 	engineFull  string
 	engine      string
+	totalRows   *uint64
+	totalBytes  *uint64
+}
+
+func formatBytes(bytes *uint64) string {
+	if bytes == nil {
+		return "N/A"
+	}
+	const unit = 1024
+	b := float64(*bytes)
+	if b < unit {
+		return fmt.Sprintf("%d B", *bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", b/float64(div), "KMGTPE"[exp])
+}
+
+func formatRows(rows *uint64) string {
+	if rows == nil {
+		return "N/A"
+	}
+	if *rows < 1000 {
+		return fmt.Sprintf("%d", *rows)
+	}
+	if *rows < 1000000 {
+		return fmt.Sprintf("%.1fK", float64(*rows)/1000)
+	}
+	if *rows < 1000000000 {
+		return fmt.Sprintf("%.1fM", float64(*rows)/1000000)
+	}
+	return fmt.Sprintf("%.1fB", float64(*rows)/1000000000)
+}
+
+// generateTableListContent creates the content for table display in the left sidebar
+func generateTableListContent(icon, tableName string, totalRows *uint64, totalBytes *uint64) string {
+	if totalRows == nil {
+		return fmt.Sprintf(`%s %s`, icon, tableName)
+	}
+
+	return fmt.Sprintf(
+		`%s %s<br><small style="color: #000; font-size: 0.8em;">Rows: <b>%s</b> | Size: <b>%s</b></small>`,
+		icon, tableName, formatRows(totalRows), formatBytes(totalBytes),
+	)
 }
 
 func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
-	if TableRelations != nil && DatabasesData != nil {
+	if TableRelations != nil && DatabasesData != nil && TableMetadata != nil {
 		log.Println("Using cached tables relations")
 		return TableRelations, nil
 	}
 
 	log.Println("Querying tables relations")
 	ctx := context.Background()
-	query := fmt.Sprintf("SELECT create_table_query, engine_full, engine, database, name, loading_dependencies_table FROM system.tables ORDER BY name")
+	query := fmt.Sprintf("SELECT create_table_query, engine_full, engine, database, name, loading_dependencies_database, loading_dependencies_table, total_rows, total_bytes FROM system.tables ORDER BY name")
 	rows, err := c.conn.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tables: %v", err)
@@ -125,11 +182,16 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 	defer rows.Close()
 
 	var tables []TableRelation
+	if TableMetadata == nil {
+		TableMetadata = make(map[string]TableInfo)
+	}
+
 	for rows.Next() {
 		res := result{}
 		database, table := "", ""
 		var loadingDependenciesTable []string
-		if err := rows.Scan(&res.createQuery, &res.engineFull, &res.engine, &database, &table, &loadingDependenciesTable); err != nil {
+		var loadingDependenciesDatabase []string
+		if err := rows.Scan(&res.createQuery, &res.engineFull, &res.engine, &database, &table, &loadingDependenciesDatabase, &loadingDependenciesTable, &res.totalRows, &res.totalBytes); err != nil {
 			return nil, fmt.Errorf("failed to scan table data: %v", err)
 		}
 
@@ -145,54 +207,84 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 			DatabasesData[database] = make(map[string]string)
 		}
 
+		fullTableName := database + "." + table
+		var icon string
+
 		// Extract the relation from the creation query
 		if res.engine == "MergeTree" { // Local Table
 			queryParts := strings.Split(res.createQuery, " ")
+			icon = `<i class="fa-solid fa-database"></i>`
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
-				DatabasesData[database][table] = `<i class="fa-solid fa-database"></i> ` + table
+				DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
 
-				tables = append(tables, TableRelation{Table: tableName, Icon: `<i class="fa-solid fa-database"></i>`})
+				tables = append(tables, TableRelation{Table: tableName, Icon: icon})
 			}
-		} else if strings.HasPrefix(res.engine, "Replicated") { // Distributed Table
+		} else if strings.HasPrefix(res.engine, "Replicated") { // Replicated Table
 			queryParts := strings.Split(res.createQuery, " ")
-			DatabasesData[database][table] = `<i class="fa-solid fa-circle-nodes"></i> ` + table
+			icon = `<i class="fa-solid fa-circle-nodes"></i>`
+			DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
 
-				tables = append(tables, TableRelation{Table: tableName, Icon: `<i class="fa-solid fa-circle-nodes"></i>`})
+				tables = append(tables, TableRelation{Table: tableName, Icon: icon})
 			}
-		} else if strings.HasPrefix(res.engine, "Dictionary") { // Distributed Table
+		} else if strings.HasPrefix(res.engine, "Dictionary") { // Dictionary Table
 			queryParts := strings.Split(res.createQuery, " ")
-			DatabasesData[database][table] = `<i class="fa-solid fa-book"></i> ` + table
+			icon = `<i class="fa-solid fa-book"></i>`
+			DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
 
-				tables = append(tables, TableRelation{DependsOnTable: loadingDependenciesTable[0], Table: tableName, Icon: `<i class="fa-solid fa-book"></i>`})
+				if len(loadingDependenciesDatabase) > 0 && len(loadingDependenciesTable) > 0 {
+					tables = append(tables, TableRelation{DependsOnTable: loadingDependenciesDatabase[0] + "." + loadingDependenciesTable[0], Table: tableName, Icon: icon})
+				} else {
+					tables = append(tables, TableRelation{Table: tableName, Icon: icon})
+				}
 			}
 		} else if res.engine == "Distributed" { // Distributed Table
 			queryParts := strings.Split(res.createQuery, " ")
 			queryParts2 := strings.Split(res.engineFull, "'")
-			DatabasesData[database][table] = `<i class="fa-solid fa-diagram-project"></i> ` + table
+			icon = `<i class="fa-solid fa-diagram-project"></i>`
+			DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
-				dstTable := queryParts2[3] + "." + queryParts2[5]
-
-				tables = append(tables, TableRelation{DependsOnTable: tableName, Table: dstTable, Icon: `<i class="fa-solid fa-diagram-project"></i>`})
+				if len(queryParts2) >= 6 {
+					dstTable := queryParts2[3] + "." + queryParts2[5]
+					tables = append(tables, TableRelation{DependsOnTable: tableName, Table: dstTable, Icon: icon})
+				} else {
+					tables = append(tables, TableRelation{Table: tableName, Icon: icon})
+				}
 			}
 		} else if res.engine == "MaterializedView" { // Materialized View
 			queryParts1 := strings.Split(res.createQuery, " ")
 			queryParts2 := strings.Split(res.createQuery, "FROM ")
-			queryParts3 := strings.Split(queryParts2[1], " ")
-			DatabasesData[database][table] = `<i class="fa-solid fa-eye"></i> ` + table
-			if len(queryParts1) > 3 {
+			icon = `<i class="fa-solid fa-eye"></i>`
+			DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
+			if len(queryParts1) > 3 && len(queryParts2) > 1 {
 				mvTable := queryParts1[3]
 				dstTable := queryParts1[5]
+				queryParts3 := strings.Split(queryParts2[1], " ")
 				srcTable := queryParts3[0]
 
-				tables = append(tables, TableRelation{DependsOnTable: srcTable, Table: mvTable, Icon: `<i class="fa-solid fa-eye"></i>`})
-				tables = append(tables, TableRelation{DependsOnTable: mvTable, Table: dstTable, Icon: `<i class="fa-solid fa-eye"></i>`})
+				tables = append(tables, TableRelation{DependsOnTable: srcTable, Table: mvTable, Icon: icon})
+				tables = append(tables, TableRelation{DependsOnTable: mvTable, Table: dstTable, Icon: icon})
 			}
+		} else {
+			// Default case for other engines
+			icon = `<i class="fa-solid fa-table"></i>`
+			DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
+			tables = append(tables, TableRelation{Table: table, Icon: icon})
+		}
+
+		// Store table metadata
+		TableMetadata[fullTableName] = TableInfo{
+			Name:       table,
+			Database:   database,
+			TotalRows:  res.totalRows,
+			TotalBytes: res.totalBytes,
+			Engine:     res.engine,
+			Icon:       icon,
 		}
 	}
 
@@ -248,40 +340,68 @@ func (c *ClickHouseClient) GenerateMermaidSchema(dbName, tableName string) (stri
 		return "", fmt.Errorf("failed to get table relations: %v", err)
 	}
 
-	sb.WriteString(fmt.Sprintf("    %d[\"%s\"]\n\n", city.Hash32([]byte(table)), table))
+	// Generate node for the main table with additional info
+	nodeContent := c.generateTableNodeContent(table)
+	sb.WriteString(fmt.Sprintf("    %d[\"%s\"]\n\n", city.Hash32([]byte(table)), nodeContent))
 	sb.WriteString(fmt.Sprintf("    style %d fill:#FF6D00,stroke:#AA00FF,color:#FFFFFF\n\n", city.Hash32([]byte(table))))
 
 	seen := make(map[string]bool)
-	getRelationsNext(&sb, tablesRelations, table, &seen)
-	getRelationsBack(&sb, tablesRelations, table, &seen)
+	c.getRelationsNext(&sb, tablesRelations, table, &seen)
+	c.getRelationsBack(&sb, tablesRelations, table, &seen)
 
 	return sb.String(), nil
 }
 
-func getRelationsNext(sb *strings.Builder, tablesRelations []TableRelation, table string, seen *map[string]bool) {
+func (c *ClickHouseClient) generateTableNodeContent(table string) string {
+	if metadata, exists := TableMetadata[table]; exists && metadata.TotalRows != nil {
+		return fmt.Sprintf(
+			"%s<br><small>Rows: <b>%s</b> Size: <b>%s</b></small>",
+			table,
+			formatRows(metadata.TotalRows),
+			formatBytes(metadata.TotalBytes),
+		)
+	}
+	return table
+}
+
+func (c *ClickHouseClient) getRelationsNext(sb *strings.Builder, tablesRelations []TableRelation, table string, seen *map[string]bool) {
 	for _, rel := range tablesRelations {
 		if rel.DependsOnTable == table && table != "" {
-			mermaidRow := fmt.Sprintf("    %d[\"%s\"] --> %d[\"%s\"]\n", city.Hash32([]byte(rel.DependsOnTable)), rel.DependsOnTable, city.Hash32([]byte(rel.Table)), rel.Table)
+			depContent := c.generateTableNodeContent(rel.DependsOnTable)
+			relContent := c.generateTableNodeContent(rel.Table)
+
+			mermaidRow := fmt.Sprintf(
+				"    %d[\"%s\"] --> %d[\"%s\"]\n",
+				city.Hash32([]byte(rel.DependsOnTable)), depContent,
+				city.Hash32([]byte(rel.Table)), relContent,
+			)
 
 			if !(*seen)[mermaidRow] {
 				(*seen)[mermaidRow] = true
 				sb.WriteString(mermaidRow)
 			}
-			getRelationsNext(sb, tablesRelations, rel.Table, seen)
+			c.getRelationsNext(sb, tablesRelations, rel.Table, seen)
 		}
 	}
 }
 
-func getRelationsBack(sb *strings.Builder, tablesRelations []TableRelation, table string, seen *map[string]bool) {
+func (c *ClickHouseClient) getRelationsBack(sb *strings.Builder, tablesRelations []TableRelation, table string, seen *map[string]bool) {
 	for _, rel := range tablesRelations {
 		if rel.Table == table && rel.DependsOnTable != "" {
-			mermaidRow := fmt.Sprintf("    %d[\"%s\"] --> %d[\"%s\"]\n", city.Hash32([]byte(rel.DependsOnTable)), rel.DependsOnTable, city.Hash32([]byte(rel.Table)), rel.Table)
+			depContent := c.generateTableNodeContent(rel.DependsOnTable)
+			relContent := c.generateTableNodeContent(rel.Table)
+
+			mermaidRow := fmt.Sprintf(
+				"    %d[\"%s\"] --> %d[\"%s\"]\n",
+				city.Hash32([]byte(rel.DependsOnTable)), depContent,
+				city.Hash32([]byte(rel.Table)), relContent,
+			)
 
 			if !(*seen)[mermaidRow] {
 				(*seen)[mermaidRow] = true
 				sb.WriteString(mermaidRow)
 			}
-			getRelationsBack(sb, tablesRelations, rel.DependsOnTable, seen)
+			c.getRelationsBack(sb, tablesRelations, rel.DependsOnTable, seen)
 		}
 	}
 }

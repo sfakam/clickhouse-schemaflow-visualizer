@@ -4,7 +4,7 @@
 
 <img src="static/img/logo_256x256.png" alt="Logo">
 
-A powerful web application for visualizing ClickHouse table relationships using Mermaid.js diagrams.
+A powerful open-source web application for visualizing ClickHouse table relationships using Mermaid.js diagrams. Browse databases and tables with an intuitive interface, explore table metadata with optional row counts and size information, and export interactive schema diagrams.
 
 [Build Status Badge] [License Badge] [Version Badge]
 
@@ -29,6 +29,7 @@ A powerful web application for visualizing ClickHouse table relationships using 
 - 🎨 Color-coded icons matching table types for better visualization
 - ↔️ View direction of data flow between tables
 - 📂 Collapsible table types legend for a cleaner interface
+- 📈 Toggle metadata visibility (table rows and size information)
 - 💾 Export diagrams as standalone HTML files
 - 🔒 Secure connection to ClickHouse with TLS support
 - 📱 Responsive web interface for all devices
@@ -127,11 +128,17 @@ A powerful web application for visualizing ClickHouse table relationships using 
 - Click on a database to expand/collapse its tables
 - Click on a table to view its schema
 
-### 2. View Table Relationships
+### 2. Toggle Table Metadata
+- Use the "Show Metadata" toggle switch below the Table Types section
+- When enabled, displays table statistics (row count and size) under each table name
+- Metadata is hidden by default for a cleaner interface
+- Your preference is automatically saved and restored
+
+### 3. View Table Relationships
 - Select a table to see its relationships with other tables
 - The diagram shows the table structure and relationships
 
-### 3. Export Diagrams
+### 4. Export Diagrams
 - Click "Export HTML" to save the current diagram as an HTML file
 
 ## 🔧 How It Works

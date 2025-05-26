@@ -51,6 +51,18 @@ document.addEventListener('DOMContentLoaded', () => {
             collapsibleHeader.classList.add('collapsed');
         }
     }
+    
+    // Setup metadata toggle
+    const metadataToggle = document.getElementById('metadata-toggle');
+    if (metadataToggle) {
+        metadataToggle.addEventListener('change', toggleMetadataVisibility);
+        
+        // Restore metadata visibility state from localStorage (default is hidden)
+        const savedMetadataState = localStorage.getItem('metadataVisible');
+        const isVisible = savedMetadataState === 'true';
+        metadataToggle.checked = isVisible;
+        updateMetadataVisibility(isVisible);
+    }
 });
 
 async function loadDatabases() {
@@ -683,6 +695,24 @@ function handleMouseWheel(event) {
     }
     
     console.log(`Zoom level: ${currentZoomLevel.toFixed(1)}`);
+}
+
+function toggleMetadataVisibility() {
+    const metadataToggle = document.getElementById('metadata-toggle');
+    const isVisible = metadataToggle.checked;
+    updateMetadataVisibility(isVisible);
+    localStorage.setItem('metadataVisible', isVisible);
+}
+
+function updateMetadataVisibility(isVisible) {
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) {
+        if (isVisible) {
+            sidebar.classList.add('metadata-visible');
+        } else {
+            sidebar.classList.remove('metadata-visible');
+        }
+    }
 }
 
 function showError(message) {
