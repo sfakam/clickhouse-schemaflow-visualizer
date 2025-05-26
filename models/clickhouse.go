@@ -154,6 +154,18 @@ func formatRows(rows *uint64) string {
 	return fmt.Sprintf("%.1fB", float64(*rows)/1000000000)
 }
 
+// generateTableListContent creates the content for table display in the left sidebar
+func generateTableListContent(icon, tableName string, totalRows *uint64, totalBytes *uint64) string {
+	if totalRows == nil {
+		return fmt.Sprintf(`%s %s`, icon, tableName)
+	}
+
+	return fmt.Sprintf(
+		`%s %s<br><small style="color: #000; font-size: 0.8em;">Rows: <b>%s</b> | Size: <b>%s</b></small>`,
+		icon, tableName, formatRows(totalRows), formatBytes(totalBytes),
+	)
+}
+
 func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 	if TableRelations != nil && DatabasesData != nil && TableMetadata != nil {
 		log.Println("Using cached tables relations")
@@ -162,7 +174,7 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 
 	log.Println("Querying tables relations")
 	ctx := context.Background()
-	query := fmt.Sprintf("SELECT create_table_query, engine_full, engine, database, name,loading_dependencies_database, loading_dependencies_table, total_rows, total_bytes FROM system.tables ORDER BY name")
+	query := fmt.Sprintf("SELECT create_table_query, engine_full, engine, database, name, loading_dependencies_database, loading_dependencies_table, total_rows, total_bytes FROM system.tables ORDER BY name")
 	rows, err := c.conn.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tables: %v", err)
@@ -204,14 +216,14 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 			icon = `<i class="fa-solid fa-database"></i>`
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
-				DatabasesData[database][table] = icon + ` ` + table
+				DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
 
 				tables = append(tables, TableRelation{Table: tableName, Icon: icon})
 			}
 		} else if strings.HasPrefix(res.engine, "Replicated") { // Replicated Table
 			queryParts := strings.Split(res.createQuery, " ")
 			icon = `<i class="fa-solid fa-circle-nodes"></i>`
-			DatabasesData[database][table] = icon + ` ` + table
+			DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
 
@@ -220,37 +232,49 @@ func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 		} else if strings.HasPrefix(res.engine, "Dictionary") { // Dictionary Table
 			queryParts := strings.Split(res.createQuery, " ")
 			icon = `<i class="fa-solid fa-book"></i>`
-			DatabasesData[database][table] = icon + ` ` + table
+			DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
 
-				tables = append(tables, TableRelation{DependsOnTable: loadingDependenciesDatabase[0] + "." + loadingDependenciesTable[0], Table: tableName, Icon: icon})
+				if len(loadingDependenciesDatabase) > 0 && len(loadingDependenciesTable) > 0 {
+					tables = append(tables, TableRelation{DependsOnTable: loadingDependenciesDatabase[0] + "." + loadingDependenciesTable[0], Table: tableName, Icon: icon})
+				} else {
+					tables = append(tables, TableRelation{Table: tableName, Icon: icon})
+				}
 			}
 		} else if res.engine == "Distributed" { // Distributed Table
 			queryParts := strings.Split(res.createQuery, " ")
 			queryParts2 := strings.Split(res.engineFull, "'")
 			icon = `<i class="fa-solid fa-diagram-project"></i>`
-			DatabasesData[database][table] = icon + ` ` + table
+			DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
 			if len(queryParts) > 2 {
 				tableName := queryParts[2]
-				dstTable := queryParts2[3] + "." + queryParts2[5]
-
-				tables = append(tables, TableRelation{DependsOnTable: tableName, Table: dstTable, Icon: icon})
+				if len(queryParts2) >= 6 {
+					dstTable := queryParts2[3] + "." + queryParts2[5]
+					tables = append(tables, TableRelation{DependsOnTable: tableName, Table: dstTable, Icon: icon})
+				} else {
+					tables = append(tables, TableRelation{Table: tableName, Icon: icon})
+				}
 			}
 		} else if res.engine == "MaterializedView" { // Materialized View
 			queryParts1 := strings.Split(res.createQuery, " ")
 			queryParts2 := strings.Split(res.createQuery, "FROM ")
-			queryParts3 := strings.Split(queryParts2[1], " ")
 			icon = `<i class="fa-solid fa-eye"></i>`
-			DatabasesData[database][table] = icon + ` ` + table
-			if len(queryParts1) > 3 {
+			DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
+			if len(queryParts1) > 3 && len(queryParts2) > 1 {
 				mvTable := queryParts1[3]
 				dstTable := queryParts1[5]
+				queryParts3 := strings.Split(queryParts2[1], " ")
 				srcTable := queryParts3[0]
 
 				tables = append(tables, TableRelation{DependsOnTable: srcTable, Table: mvTable, Icon: icon})
 				tables = append(tables, TableRelation{DependsOnTable: mvTable, Table: dstTable, Icon: icon})
 			}
+		} else {
+			// Default case for other engines
+			icon = `<i class="fa-solid fa-table"></i>`
+			DatabasesData[database][table] = generateTableListContent(icon, table, res.totalRows, res.totalBytes)
+			tables = append(tables, TableRelation{Table: table, Icon: icon})
 		}
 
 		// Store table metadata
