@@ -6,7 +6,10 @@
 
 A powerful open-source web application for visualizing ClickHouse table relationships using Mermaid.js diagrams. Browse databases and tables with an intuitive interface, explore table metadata with optional row counts and size information, and export interactive schema diagrams.
 
-[Build Status Badge] [License Badge] [Version Badge]
+[![Build Status](https://github.com/FulgerX2007/clickhouse-schemaflow-visualizer/actions/workflows/release.yml/badge.svg)](https://github.com/FulgerX2007/clickhouse-schemaflow-visualizer/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub release](https://img.shields.io/github/v/release/FulgerX2007/clickhouse-schemaflow-visualizer)](https://github.com/FulgerX2007/clickhouse-schemaflow-visualizer/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/fulgerX2007/clickhouse-schemaflow-visualizer)](https://goreportcard.com/report/github.com/fulgerX2007/clickhouse-schemaflow-visualizer)
 
 </div>
 
