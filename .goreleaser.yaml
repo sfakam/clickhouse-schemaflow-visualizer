@@ -1,0 +1,90 @@
+# GoReleaser configuration for clickhouse-schemaflow-visualizer
+# See https://goreleaser.com for documentation
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - binary: clickhouse-schemaflow-visualizer
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE*
+      - static/**/*
+      - .env.example
+
+nfpms:
+  - id: packages
+    package_name: clickhouse-schemaflow-visualizer
+    vendor: Fulgerx2007
+    homepage: https://github.com/FulgerX2007/clickhouse-schemaflow-visualizer
+    maintainer: Fulgerx2007 <fulgerx2007@gmail.com>
+    description: |-
+      A powerful open-source web application for visualizing ClickHouse table relationships using Mermaid.js diagrams. 
+      Browse databases and tables with an intuitive interface, explore table metadata with optional row counts and size information, and export interactive schema diagrams.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+      - apk
+    dependencies:
+      - ca-certificates
+    scripts:
+      preinstall: scripts/preinstall.sh
+      postinstall: scripts/postinstall.sh
+      preremove: scripts/preremove.sh
+      postremove: scripts/postremove.sh
+    contents:
+      - src: static
+        dst: /usr/share/clickhouse-schemaflow-visualizer/static
+        type: tree
+        file_info:
+          mode: 0644
+      - src: .env.example
+        dst: /etc/clickhouse-schemaflow-visualizer/config.env.example
+        type: config|noreplace
+        file_info:
+          mode: 0644
+    rpm:
+      group: Applications/Databases
+      summary: A powerful open-source web application for visualizing ClickHouse table relationships using Mermaid.js diagrams. Browse databases and tables with an intuitive interface, explore table metadata with optional row counts and size information, and export interactive schema diagrams.
+    deb:
+      lintian_overrides:
+        - statically-linked-binary
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  footer: |
+    ---
+    Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
