@@ -41,10 +41,12 @@ archives:
 nfpms:
   - id: packages
     package_name: clickhouse-schemaflow-visualizer
-    vendor: ChView2
+    vendor: Fulgerx2007
     homepage: https://github.com/FulgerX2007/clickhouse-schemaflow-visualizer
-    maintainer: ChView2 Team <maintainer@example.com>
-    description: Web-based ClickHouse database viewer and query interface
+    maintainer: Fulgerx2007 <fulgerx2007@gmail.com>
+    description: |-
+      A powerful open-source web application for visualizing ClickHouse table relationships using Mermaid.js diagrams. 
+      Browse databases and tables with an intuitive interface, explore table metadata with optional row counts and size information, and export interactive schema diagrams.
     license: MIT
     formats:
       - deb
@@ -70,7 +72,7 @@ nfpms:
           mode: 0644
     rpm:
       group: Applications/Databases
-      summary: Web-based ClickHouse database viewer
+      summary: A powerful open-source web application for visualizing ClickHouse table relationships using Mermaid.js diagrams. Browse databases and tables with an intuitive interface, explore table metadata with optional row counts and size information, and export interactive schema diagrams.
     deb:
       lintian_overrides:
         - statically-linked-binary
