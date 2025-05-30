@@ -38,20 +38,40 @@ document.addEventListener('DOMContentLoaded', () => {
     zoomOutBtn.addEventListener('click', zoomOut);
     resetZoomBtn.addEventListener('click', resetZoom);
     
-    // Setup collapsible Table Types section
-    const collapsibleHeader = document.querySelector('.collapsible-header');
-    if (collapsibleHeader) {
-        collapsibleHeader.addEventListener('click', () => {
-            collapsibleHeader.classList.toggle('collapsed');
+    // Setup collapsible Database header section
+    const databaseHeader = document.getElementById('database-header');
+    const sidebar = document.querySelector('.sidebar');
+    if (databaseHeader && sidebar) {
+        databaseHeader.addEventListener('click', () => {
+            databaseHeader.classList.toggle('collapsed');
+            sidebar.classList.toggle('database-collapsed');
             // Save collapsed state to localStorage
-            const isCollapsed = collapsibleHeader.classList.contains('collapsed');
+            const isCollapsed = databaseHeader.classList.contains('collapsed');
+            localStorage.setItem('databaseHeaderCollapsed', isCollapsed);
+        });
+        
+        // Restore collapsed state from localStorage
+        const savedDatabaseState = localStorage.getItem('databaseHeaderCollapsed');
+        if (savedDatabaseState === 'true') {
+            databaseHeader.classList.add('collapsed');
+            sidebar.classList.add('database-collapsed');
+        }
+    }
+    
+    // Setup collapsible Table Types section
+    const tableTypesHeader = document.querySelector('.legend-container .collapsible-header');
+    if (tableTypesHeader) {
+        tableTypesHeader.addEventListener('click', () => {
+            tableTypesHeader.classList.toggle('collapsed');
+            // Save collapsed state to localStorage
+            const isCollapsed = tableTypesHeader.classList.contains('collapsed');
             localStorage.setItem('tableTypesCollapsed', isCollapsed);
         });
         
         // Restore collapsed state from localStorage
         const savedCollapsedState = localStorage.getItem('tableTypesCollapsed');
         if (savedCollapsedState === 'true') {
-            collapsibleHeader.classList.add('collapsed');
+            tableTypesHeader.classList.add('collapsed');
         }
     }
     

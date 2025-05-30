@@ -57,6 +57,28 @@ main {
     font-size: 1.2rem;
 }
 
+.sidebar-header .collapsible-header {
+    margin: 0;
+    font-size: 1.2rem;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sidebar-header .collapsible-header:hover {
+    color: #007bff;
+}
+
+.sidebar-header .collapsible-header.collapsed + #refresh-btn {
+    /* Keep refresh button visible even when collapsed */
+}
+
+.sidebar.database-collapsed #database-tree-container {
+    display: none;
+}
+
 #refresh-btn {
     background: none;
     border: none;
@@ -274,7 +296,24 @@ main {
 }
 
 .table-details-container.collapsed {
-    margin-right: -350px;
+    width: 60px;
+    min-width: 60px;
+    max-width: 60px;
+    overflow: hidden;
+}
+
+.table-details-container.collapsed .table-details-content {
+    display: none;
+}
+
+.table-details-container.collapsed .table-details-header {
+    transform: rotate(-90deg);
+    transform-origin: center;
+    width: 200px;
+    position: relative;
+    left: -70px;
+    top: 80px;
+    white-space: nowrap;
 }
 
 .table-details-header {
