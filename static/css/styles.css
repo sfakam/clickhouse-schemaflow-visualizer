@@ -150,11 +150,16 @@ main {
     transition: transform 0.3s ease;
 }
 
-.collapsed .collapse-icon {
+.collapsible-header.collapsed .collapse-icon {
     transform: rotate(-90deg);
 }
 
-.collapsed + .table-types-legend {
+.collapsible-header.collapsed + .table-types-legend {
+    display: none;
+}
+
+/* Alternative approach - target the legend container when header is collapsed */
+.legend-container .collapsible-header.collapsed ~ .table-types-legend {
     display: none;
 }
 
