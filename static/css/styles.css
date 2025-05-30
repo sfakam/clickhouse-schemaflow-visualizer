@@ -358,6 +358,7 @@ main {
     padding: 1rem;
     overflow-y: auto;
     background-color: #fff;
+    font-size: 79%;
 }
 
 .no-table-selected {
@@ -406,7 +407,7 @@ main {
 .columns-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
 }
 
 .columns-table th,

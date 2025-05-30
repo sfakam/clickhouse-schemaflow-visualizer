@@ -88,8 +88,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Setup table details toggle
-    if (toggleTableDetailsBtn) {
-        toggleTableDetailsBtn.addEventListener('click', toggleTableDetails);
+    const tableDetailsHeader = document.querySelector('.table-details-header');
+    if (tableDetailsHeader) {
+        tableDetailsHeader.addEventListener('click', toggleTableDetails);
         
         // Restore table details visibility state from localStorage
         const savedTableDetailsState = localStorage.getItem('tableDetailsVisible');
