@@ -827,7 +827,6 @@ function renderTableDetails(details) {
                     <tr>
                         <th>Name</th>
                         <th>Type</th>
-                        <th>Comment</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -835,7 +834,6 @@ function renderTableDetails(details) {
                         <tr>
                             <td class="column-name">${column.name}</td>
                             <td><span class="column-type">${column.type}</span></td>
-                            <td class="column-comment">${column.comment || '-'}</td>
                         </tr>
                     `).join('')}
                 </tbody>
