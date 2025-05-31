@@ -48,6 +48,22 @@ type TableInfo struct {
 	Icon       string
 }
 
+type ColumnInfo struct {
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Position uint64 `json:"position"`
+	Comment  string `json:"comment"`
+}
+
+type TableDetails struct {
+	Name       string       `json:"name"`
+	Database   string       `json:"database"`
+	Engine     string       `json:"engine"`
+	TotalRows  *uint64      `json:"total_rows"`
+	TotalBytes *uint64      `json:"total_bytes"`
+	Columns    []ColumnInfo `json:"columns"`
+}
+
 // ClickHouseClient represents a client for interacting with ClickHouse
 type ClickHouseClient struct {
 	conn clickhouse.Conn
@@ -404,6 +420,62 @@ func (c *ClickHouseClient) getRelationsBack(sb *strings.Builder, tablesRelations
 			c.getRelationsBack(sb, tablesRelations, rel.DependsOnTable, seen)
 		}
 	}
+}
+
+// GetTableColumns returns detailed column information for a specific table
+func (c *ClickHouseClient) GetTableColumns(database, table string) (*TableDetails, error) {
+	ctx := context.Background()
+
+	// First get basic table info
+	tableQuery := `
+		SELECT engine, total_rows, total_bytes 
+		FROM system.tables 
+		WHERE database = ? AND name = ?
+	`
+
+	var engine string
+	var totalRows, totalBytes *uint64
+
+	row := c.conn.QueryRow(ctx, tableQuery, database, table)
+	if err := row.Scan(&engine, &totalRows, &totalBytes); err != nil {
+		return nil, fmt.Errorf("failed to get table info: %v", err)
+	}
+
+	// Get column information
+	columnsQuery := `
+		SELECT name, type, position, comment
+		FROM system.columns 
+		WHERE database = ? AND table = ? 
+		ORDER BY position
+	`
+
+	rows, err := c.conn.Query(ctx, columnsQuery, database, table)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query columns: %v", err)
+	}
+	defer rows.Close()
+
+	var columns []ColumnInfo
+	for rows.Next() {
+		var col ColumnInfo
+		if err := rows.Scan(&col.Name, &col.Type, &col.Position, &col.Comment); err != nil {
+			return nil, fmt.Errorf("failed to scan column: %v", err)
+		}
+		columns = append(columns, col)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating columns: %v", err)
+	}
+
+	return &TableDetails{
+		Name:       table,
+		Database:   database,
+		Engine:     engine,
+		TotalRows:  totalRows,
+		TotalBytes: totalBytes,
+		Columns:    columns,
+	}, nil
 }
 
 // Close closes the ClickHouse connection

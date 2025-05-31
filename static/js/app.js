@@ -6,6 +6,9 @@ const exportHtmlBtn = document.getElementById('export-html-btn');
 const zoomInBtn = document.getElementById('zoom-in-btn');
 const zoomOutBtn = document.getElementById('zoom-out-btn');
 const resetZoomBtn = document.getElementById('reset-zoom-btn');
+const tableDetailsContainer = document.querySelector('.table-details-container');
+const tableDetailsContent = document.getElementById('table-details');
+const toggleTableDetailsBtn = document.getElementById('toggle-table-details');
 
 let databases = [];
 let selectedDatabase = null;
@@ -35,20 +38,40 @@ document.addEventListener('DOMContentLoaded', () => {
     zoomOutBtn.addEventListener('click', zoomOut);
     resetZoomBtn.addEventListener('click', resetZoom);
     
-    // Setup collapsible Table Types section
-    const collapsibleHeader = document.querySelector('.collapsible-header');
-    if (collapsibleHeader) {
-        collapsibleHeader.addEventListener('click', () => {
-            collapsibleHeader.classList.toggle('collapsed');
+    // Setup collapsible Database header section
+    const databaseHeader = document.getElementById('database-header');
+    const sidebar = document.querySelector('.sidebar');
+    if (databaseHeader && sidebar) {
+        databaseHeader.addEventListener('click', () => {
+            databaseHeader.classList.toggle('collapsed');
+            sidebar.classList.toggle('database-collapsed');
             // Save collapsed state to localStorage
-            const isCollapsed = collapsibleHeader.classList.contains('collapsed');
+            const isCollapsed = databaseHeader.classList.contains('collapsed');
+            localStorage.setItem('databaseHeaderCollapsed', isCollapsed);
+        });
+        
+        // Restore collapsed state from localStorage
+        const savedDatabaseState = localStorage.getItem('databaseHeaderCollapsed');
+        if (savedDatabaseState === 'true') {
+            databaseHeader.classList.add('collapsed');
+            sidebar.classList.add('database-collapsed');
+        }
+    }
+    
+    // Setup collapsible Table Types section
+    const tableTypesHeader = document.querySelector('.legend-container .collapsible-header');
+    if (tableTypesHeader) {
+        tableTypesHeader.addEventListener('click', () => {
+            tableTypesHeader.classList.toggle('collapsed');
+            // Save collapsed state to localStorage
+            const isCollapsed = tableTypesHeader.classList.contains('collapsed');
             localStorage.setItem('tableTypesCollapsed', isCollapsed);
         });
         
         // Restore collapsed state from localStorage
         const savedCollapsedState = localStorage.getItem('tableTypesCollapsed');
         if (savedCollapsedState === 'true') {
-            collapsibleHeader.classList.add('collapsed');
+            tableTypesHeader.classList.add('collapsed');
         }
     }
     
@@ -62,6 +85,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const isVisible = savedMetadataState === 'true';
         metadataToggle.checked = isVisible;
         updateMetadataVisibility(isVisible);
+    }
+    
+    // Setup table details toggle
+    const tableDetailsHeader = document.querySelector('.table-details-header');
+    if (tableDetailsHeader) {
+        tableDetailsHeader.addEventListener('click', toggleTableDetails);
+        
+        // Restore table details visibility state from localStorage
+        const savedTableDetailsState = localStorage.getItem('tableDetailsVisible');
+        const isVisible = savedTableDetailsState !== 'false'; // Default to visible
+        if (!isVisible) {
+            tableDetailsContainer.classList.add('collapsed');
+        }
     }
 });
 
@@ -202,6 +238,7 @@ async function selectTable(tableItem) {
     currentSelection.textContent = `${selectedDatabase} / ${selectedTable}`;
 
     await loadTableSchema();
+    await loadTableDetails(selectedDatabase, selectedTable);
 }
 
 async function loadTableSchema() {
@@ -713,6 +750,112 @@ function updateMetadataVisibility(isVisible) {
             sidebar.classList.remove('metadata-visible');
         }
     }
+}
+
+function toggleTableDetails() {
+    tableDetailsContainer.classList.toggle('collapsed');
+    const isVisible = !tableDetailsContainer.classList.contains('collapsed');
+    localStorage.setItem('tableDetailsVisible', isVisible);
+    
+    // Update button icon rotation
+    const icon = toggleTableDetailsBtn.querySelector('i');
+    if (icon) {
+        icon.style.transform = isVisible ? 'rotate(90deg)' : 'rotate(0deg)';
+    }
+}
+
+async function loadTableDetails(database, table) {
+    if (!database || !table) return;
+
+    try {
+        const response = await fetch(`/api/table/${database}/${table}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const tableDetails = await response.json();
+        renderTableDetails(tableDetails);
+    } catch (error) {
+        console.error('Error loading table details:', error);
+        showTableDetailsError('Failed to load table details.');
+    }
+}
+
+function renderTableDetails(details) {
+    if (!details) {
+        showTableDetailsError('No table details available.');
+        return;
+    }
+
+    const formatBytes = (bytes) => {
+        if (!bytes) return 'N/A';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let size = bytes;
+        let unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex++;
+        }
+        return `${size.toFixed(1)} ${units[unitIndex]}`;
+    };
+
+    const formatRows = (rows) => {
+        if (!rows) return 'N/A';
+        return rows.toLocaleString();
+    };
+
+    const html = `
+        <div class="table-info">
+            <h4><i class="fa-solid fa-info-circle"></i> Table Information</h4>
+            <div class="table-info-grid">
+                <span class="table-info-label">Name:</span>
+                <span class="table-info-value">${details.name}</span>
+                <span class="table-info-label">Database:</span>
+                <span class="table-info-value">${details.database}</span>
+                <span class="table-info-label">Engine:</span>
+                <span class="table-info-value">${details.engine}</span>
+                <span class="table-info-label">Rows:</span>
+                <span class="table-info-value">${formatRows(details.total_rows)}</span>
+                <span class="table-info-label">Size:</span>
+                <span class="table-info-value">${formatBytes(details.total_bytes)}</span>
+            </div>
+        </div>
+        
+        <div class="columns-section">
+            <h4><i class="fa-solid fa-columns"></i> Columns (${details.columns.length})</h4>
+            <table class="columns-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${details.columns.map(column => `
+                        <tr>
+                            <td class="column-name">${column.name}</td>
+                            <td><span class="column-type">${column.type}</span></td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    tableDetailsContent.innerHTML = html;
+}
+
+function showTableDetailsError(message) {
+    tableDetailsContent.innerHTML = `
+        <div class="no-table-selected">
+            <i class="fa-solid fa-exclamation-triangle"></i>
+            <p>${message}</p>
+        </div>
+    `;
+}
+
+function showNoTableSelected() {
+    tableDetailsContent.innerHTML = '<p class="no-table-selected">Select a table to view its details</p>';
 }
 
 function showError(message) {

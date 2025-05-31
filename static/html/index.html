@@ -18,10 +18,10 @@
         <div class="container">
             <div class="sidebar">
                 <div class="sidebar-header">
-                    <h2>Databases & Tables</h2>
+                    <h2 class="collapsible-header" id="database-header">Databases & Tables <i class="fa-solid fa-chevron-down collapse-icon"></i></h2>
                     <button id="refresh-btn" title="Refresh database list">↻</button>
                 </div>
-                <div class="tree-container">
+                <div class="tree-container" id="database-tree-container">
                     <ul id="database-tree" class="tree-view"></ul>
                 </div>
                 <div class="legend-container">
@@ -50,13 +50,26 @@
                         <button id="export-html-btn">Export HTML</button>
                     </div>
                 </div>
-                <div class="schema-container">
-                    <div class="view-controls">
-                        <button id="zoom-in-btn" title="Zoom in"><i class="icon-zoom-in">+</i></button>
-                        <button id="zoom-out-btn" title="Zoom out"><i class="icon-zoom-out">-</i></button>
-                        <button id="reset-zoom-btn" title="Reset zoom"><i class="icon-reset">↺</i></button>
+                <div class="content-area">
+                    <div class="schema-container">
+                        <div class="view-controls">
+                            <button id="zoom-in-btn" title="Zoom in"><i class="icon-zoom-in">+</i></button>
+                            <button id="zoom-out-btn" title="Zoom out"><i class="icon-zoom-out">-</i></button>
+                            <button id="reset-zoom-btn" title="Reset zoom"><i class="icon-reset">↺</i></button>
+                        </div>
+                        <pre id="schema-diagram"></pre>
                     </div>
-                    <pre id="schema-diagram"></pre>
+                    <div class="table-details-container">
+                        <div class="table-details-header">
+                            <h3><i class="fa-solid fa-table"></i> Table Details</h3>
+                            <button id="toggle-table-details" title="Toggle table details">
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div id="table-details" class="table-details-content">
+                            <p class="no-table-selected">Select a table to view its details</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

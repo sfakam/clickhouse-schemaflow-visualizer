@@ -25,6 +25,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 	{
 		api.GET("/databases", h.GetDatabases)
 		api.GET("/schema/:database/:table", h.GetTableSchema)
+		api.GET("/table/:database/:table", h.GetTableDetails)
 	}
 }
 
@@ -62,4 +63,23 @@ func (h *Handler) GetTableSchema(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"schema": schema})
+}
+
+// GetTableDetails returns detailed information about the selected table
+func (h *Handler) GetTableDetails(c *gin.Context) {
+	database := c.Param("database")
+	table := c.Param("table")
+
+	if database == "" || table == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "database and table parameters are required"})
+		return
+	}
+
+	details, err := h.clickhouse.GetTableColumns(database, table)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, details)
 }
