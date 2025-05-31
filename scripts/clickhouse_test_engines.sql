@@ -182,9 +182,9 @@ create table test_engines.buf (
 ) engine = Buffer(test_engines, mt, 16, 10, 60, 10, 10000, 100000, 1000000, 10000000);
 
 -- Dictionary (if dictionaries are configured)
--- create table test_engines.dict (
---     id UInt32, val String
---) engine = Dictionary('dict_name');
+create table test_engines.dict (
+    id UInt32, val String
+) engine = Dictionary('dict_name');
 
 -- Materialized View (example)
 drop view if exists test_engines.mv;
