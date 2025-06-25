@@ -235,6 +235,9 @@ async function selectTable(tableItem) {
     selectedDatabase = tableItem.dataset.database;
     selectedTable = tableItem.dataset.table;
 
+    // Reset zoom level when selecting a new table
+    currentZoomLevel = 1;
+
     currentSelection.textContent = `${selectedDatabase} / ${selectedTable}`;
 
     await loadTableSchema();
@@ -419,17 +422,13 @@ function exportHtml() {
                     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
                 }
                 .view-controls button {
-                    background: rgba(255, 255, 255, 0.8);
-                    border: 1px solid #ddd;
+                    padding: 0.5rem 1rem;
+                    margin-left: 0.5rem;
+                    background-color: #007bff;
+                    color: #fff;
+                    border: none;
                     border-radius: 3px;
-                    width: 30px;
-                    height: 30px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
                     cursor: pointer;
-                    font-size: 16px;
-                    transition: background-color 0.2s;
                 }
                 .view-controls button:hover {
                     background-color: #f0f0f0;
