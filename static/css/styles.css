@@ -454,8 +454,6 @@ main {
     background-color: #f8f9fa;
     font-weight: bold;
     color: #495057;
-    position: sticky;
-    top: 0;
 }
 
 .columns-table td {
