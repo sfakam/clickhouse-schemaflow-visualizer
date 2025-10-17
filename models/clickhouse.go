@@ -4,29 +4,35 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/go-faster/city"
 )
 
 // Config holds the ClickHouse connection configuration
 type Config struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	Database string
-	// TLS configuration
-	Secure     bool   // Enable TLS
-	SkipVerify bool   // Skip TLS certificate verification
-	CertPath   string // Path to client certificate file
-	KeyPath    string // Path to client key file
-	CAPath     string // Path to CA certificate file
-	ServerName string // Server name for certificate verification
+	Host       string
+	Port       int
+	User       string
+	Password   string
+	Database   string
+	Secure     bool
+	SkipVerify bool
+	ServerName string
+	CertPath   string
+	KeyPath    string
+	CAPath     string
+	UseHTTP    bool  // Use HTTP client instead of native client
 }
 
 var DatabasesData map[string]map[string]string
@@ -64,15 +70,310 @@ type TableDetails struct {
 	Columns    []ColumnInfo `json:"columns"`
 }
 
+// ClickHouseDBClient interface defines the database operations
+type ClickHouseDBClient interface {
+	Query(ctx context.Context, query string, args ...interface{}) (driver.Rows, error)
+	QueryRow(ctx context.Context, query string, args ...interface{}) driver.Row
+	Ping(ctx context.Context) error
+	Close() error
+}
+
+// NativeClient wraps the native ClickHouse connection
+type NativeClient struct {
+	conn driver.Conn
+}
+
+func (n *NativeClient) Query(ctx context.Context, query string, args ...interface{}) (driver.Rows, error) {
+	return n.conn.Query(ctx, query, args...)
+}
+
+func (n *NativeClient) QueryRow(ctx context.Context, query string, args ...interface{}) driver.Row {
+	return n.conn.QueryRow(ctx, query, args...)
+}
+
+func (n *NativeClient) Ping(ctx context.Context) error {
+	return n.conn.Ping(ctx)
+}
+
+func (n *NativeClient) Close() error {
+	return n.conn.Close()
+}
+
+// HTTPRows implements driver.Rows for HTTP responses
+type HTTPRows struct {
+	lines    []string
+	current  int
+	columns  []string
+	response *http.Response
+}
+
+func (r *HTTPRows) Next() bool {
+	r.current++
+	return r.current < len(r.lines)
+}
+
+func (r *HTTPRows) Scan(dest ...interface{}) error {
+	if r.current >= len(r.lines) || r.current < 0 {
+		return fmt.Errorf("no more rows")
+	}
+	
+	line := r.lines[r.current]
+	fields := strings.Split(line, "\t")
+	
+	for i, field := range fields {
+		if i >= len(dest) {
+			break
+		}
+		
+		switch v := dest[i].(type) {
+		case *string:
+			*v = field
+		case *int:
+			if val, err := strconv.Atoi(field); err == nil {
+				*v = val
+			}
+		case *uint64:
+			if val, err := strconv.ParseUint(field, 10, 64); err == nil {
+				*v = val
+			}
+		case **uint64:
+			// Handle pointer to pointer to uint64 (nullable uint64)
+			if field == "\\N" || field == "" || field == "0" {
+				*v = nil
+			} else {
+				if val, err := strconv.ParseUint(field, 10, 64); err == nil {
+					*v = &val
+				}
+			}
+		case *[]string:
+			// Handle array fields (enclosed in [])
+			if strings.HasPrefix(field, "[") && strings.HasSuffix(field, "]") {
+				field = strings.Trim(field, "[]")
+				if field == "" {
+					*v = []string{}
+				} else {
+					parts := strings.Split(field, ",")
+					for j, part := range parts {
+						parts[j] = strings.Trim(strings.Trim(part, "'"), "\"")
+					}
+					*v = parts
+				}
+			} else {
+				*v = []string{field}
+			}
+		default:
+			// Try to handle as string pointer
+			if strPtr, ok := dest[i].(**string); ok {
+				if field == "\\N" || field == "" {
+					*strPtr = nil
+				} else {
+					str := field
+					*strPtr = &str
+				}
+			} else {
+				return fmt.Errorf("unsupported scan type: %T", dest[i])
+			}
+		}
+	}
+	
+	return nil
+}
+
+func (r *HTTPRows) Close() error {
+	if r.response != nil && r.response.Body != nil {
+		return r.response.Body.Close()
+	}
+	return nil
+}
+
+func (r *HTTPRows) Err() error {
+	return nil
+}
+
+func (r *HTTPRows) ColumnTypes() []driver.ColumnType {
+	return []driver.ColumnType{}
+}
+
+func (r *HTTPRows) ScanStruct(dest interface{}) error {
+	return fmt.Errorf("ScanStruct not implemented for HTTP client")
+}
+
+func (r *HTTPRows) Totals(dest ...interface{}) error {
+	return fmt.Errorf("Totals not implemented for HTTP client")
+}
+
+func (r *HTTPRows) Columns() []string {
+	return r.columns
+}
+
+// HTTPRow implements driver.Row for HTTP single row responses
+type HTTPRow struct {
+	data []string
+}
+
+func (r *HTTPRow) Scan(dest ...interface{}) error {
+	for i, field := range r.data {
+		if i >= len(dest) {
+			break
+		}
+		
+		switch v := dest[i].(type) {
+		case *string:
+			*v = field
+		case *int:
+			if val, err := strconv.Atoi(field); err == nil {
+				*v = val
+			}
+		default:
+			return fmt.Errorf("unsupported scan type: %T", dest[i])
+		}
+	}
+	return nil
+}
+
+func (r *HTTPRow) Err() error {
+	return nil
+}
+
+func (r *HTTPRow) ScanStruct(dest interface{}) error {
+	return fmt.Errorf("ScanStruct not implemented for HTTP client")
+}
+
+// HTTPClient wraps HTTP-based ClickHouse connection using standard net/http
+type HTTPClient struct {
+	config Config
+	client *http.Client
+	baseURL string
+}
+
+func (h *HTTPClient) Query(ctx context.Context, query string, args ...interface{}) (driver.Rows, error) {
+	// Replace any placeholders in query with args
+	finalQuery := query
+	for i, arg := range args {
+		placeholder := fmt.Sprintf("$%d", i+1)
+		finalQuery = strings.ReplaceAll(finalQuery, placeholder, fmt.Sprintf("'%v'", arg))
+	}
+	
+	resp, err := h.executeQuery(ctx, finalQuery)
+	if err != nil {
+		return nil, err
+	}
+	
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		resp.Body.Close()
+		return nil, fmt.Errorf("failed to read response: %v", err)
+	}
+	
+	lines := strings.Split(strings.TrimSpace(string(body)), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		lines = []string{}
+	}
+	
+	return &HTTPRows{
+		lines:    lines,
+		current:  -1,
+		response: resp,
+	}, nil
+}
+
+func (h *HTTPClient) QueryRow(ctx context.Context, query string, args ...interface{}) driver.Row {
+	rows, err := h.Query(ctx, query, args...)
+	if err != nil {
+		return &HTTPRow{data: []string{}}
+	}
+	defer rows.Close()
+	
+	if rows.Next() {
+		var data []string
+		// This is a simplified implementation - in practice you'd need to know the column count
+		var col1, col2, col3, col4, col5 string
+		if err := rows.Scan(&col1, &col2, &col3, &col4, &col5); err == nil {
+			data = []string{col1, col2, col3, col4, col5}
+		}
+		return &HTTPRow{data: data}
+	}
+	
+	return &HTTPRow{data: []string{}}
+}
+
+func (h *HTTPClient) Ping(ctx context.Context) error {
+	_, err := h.executeQuery(ctx, "SELECT 1")
+	return err
+}
+
+func (h *HTTPClient) Close() error {
+	// HTTP client doesn't need explicit closing
+	return nil
+}
+
+func (h *HTTPClient) executeQuery(ctx context.Context, query string) (*http.Response, error) {
+	reqBody := strings.NewReader(query)
+	
+	req, err := http.NewRequestWithContext(ctx, "POST", h.baseURL, reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	
+	// Set basic auth
+	auth := base64.StdEncoding.EncodeToString([]byte(h.config.User + ":" + h.config.Password))
+	req.Header.Set("Authorization", "Basic "+auth)
+	req.Header.Set("Content-Type", "text/plain")
+	
+	// Set database parameter
+	if h.config.Database != "" {
+		q := req.URL.Query()
+		q.Set("database", h.config.Database)
+		req.URL.RawQuery = q.Encode()
+	}
+	
+	resp, err := h.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %v", err)
+	}
+	
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return nil, fmt.Errorf("query failed with status %d: %s", resp.StatusCode, string(body))
+	}
+	
+	return resp, nil
+}
+
 // ClickHouseClient represents a client for interacting with ClickHouse
 type ClickHouseClient struct {
-	conn clickhouse.Conn
+	conn ClickHouseDBClient
 }
 
 // NewClickHouseClient creates a new ClickHouse client
 func NewClickHouseClient(config Config) (*ClickHouseClient, error) {
+	var client ClickHouseDBClient
+	var err error
+
+	if config.UseHTTP {
+		client, err = createHTTPClient(config)
+	} else {
+		client, err = createNativeClient(config)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Test connection
+	if err := client.Ping(context.Background()); err != nil {
+		return nil, fmt.Errorf("failed to ping ClickHouse: %v", err)
+	}
+
+	return &ClickHouseClient{conn: client}, nil
+}
+
+// createNativeClient creates a native TCP-based ClickHouse client
+func createNativeClient(config Config) (*NativeClient, error) {
 	options := &clickhouse.Options{
-		Addr: []string{fmt.Sprintf("%s:%d", config.Host, config.Port)},
+		Protocol: clickhouse.Native,
+		Addr:     []string{fmt.Sprintf("%s:%d", config.Host, config.Port)},
 		Auth: clickhouse.Auth{
 			Database: config.Database,
 			Username: config.User,
@@ -118,15 +419,69 @@ func NewClickHouseClient(config Config) (*ClickHouseClient, error) {
 
 	conn, err := clickhouse.Open(options)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to ClickHouse: %v", err)
+		return nil, fmt.Errorf("failed to connect to ClickHouse (native): %v", err)
 	}
 
-	// Test connection
-	if err := conn.Ping(context.Background()); err != nil {
-		return nil, fmt.Errorf("failed to ping ClickHouse: %v", err)
+	return &NativeClient{conn: conn}, nil
+}
+
+// createHTTPClient creates an HTTP-based ClickHouse client using standard net/http
+func createHTTPClient(config Config) (*HTTPClient, error) {
+	// Create HTTP client with TLS configuration
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
 	}
 
-	return &ClickHouseClient{conn: conn}, nil
+	// Configure TLS if enabled
+	if config.Secure {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: config.SkipVerify,
+		}
+
+		// Set server name if provided
+		if config.ServerName != "" {
+			tlsConfig.ServerName = config.ServerName
+		}
+
+		// Load client certificate if provided
+		if config.CertPath != "" && config.KeyPath != "" {
+			cert, err := tls.LoadX509KeyPair(config.CertPath, config.KeyPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load client certificate: %v", err)
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		}
+
+		// Load CA certificate if provided
+		if config.CAPath != "" {
+			caCert, err := os.ReadFile(config.CAPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read CA certificate: %v", err)
+			}
+			caCertPool := x509.NewCertPool()
+			if !caCertPool.AppendCertsFromPEM(caCert) {
+				return nil, fmt.Errorf("failed to append CA certificate")
+			}
+			tlsConfig.RootCAs = caCertPool
+		}
+
+		httpClient.Transport = &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+	}
+
+	// Build base URL
+	protocol := "http"
+	if config.Secure {
+		protocol = "https"
+	}
+	baseURL := fmt.Sprintf("%s://%s:%d/", protocol, config.Host, config.Port)
+
+	return &HTTPClient{
+		config:  config,
+		client:  httpClient,
+		baseURL: baseURL,
+	}, nil
 }
 
 type result struct {
