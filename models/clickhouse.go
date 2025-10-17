@@ -209,6 +209,7 @@ func (r *HTTPRows) Columns() []string {
 // HTTPRow implements driver.Row for HTTP single row responses
 type HTTPRow struct {
 	data []string
+	err  error
 }
 
 func (r *HTTPRow) Scan(dest ...interface{}) error {
@@ -224,15 +225,54 @@ func (r *HTTPRow) Scan(dest ...interface{}) error {
 			if val, err := strconv.Atoi(field); err == nil {
 				*v = val
 			}
+		case *uint64:
+			if val, err := strconv.ParseUint(field, 10, 64); err == nil {
+				*v = val
+			}
+		case **uint64:
+			// Handle pointer to pointer to uint64 (nullable uint64)
+			if field == "\\N" || field == "" || field == "0" {
+				*v = nil
+			} else {
+				if val, err := strconv.ParseUint(field, 10, 64); err == nil {
+					*v = &val
+				}
+			}
+		case *[]string:
+			// Handle array fields (enclosed in [])
+			if strings.HasPrefix(field, "[") && strings.HasSuffix(field, "]") {
+				field = strings.Trim(field, "[]")
+				if field == "" {
+					*v = []string{}
+				} else {
+					parts := strings.Split(field, ",")
+					for j, part := range parts {
+						parts[j] = strings.Trim(strings.Trim(part, "'"), "\"")
+					}
+					*v = parts
+				}
+			} else {
+				*v = []string{field}
+			}
 		default:
-			return fmt.Errorf("unsupported scan type: %T", dest[i])
+			// Try to handle as string pointer
+			if strPtr, ok := dest[i].(**string); ok {
+				if field == "\\N" || field == "" {
+					*strPtr = nil
+				} else {
+					str := field
+					*strPtr = &str
+				}
+			} else {
+				return fmt.Errorf("unsupported scan type: %T", dest[i])
+			}
 		}
 	}
 	return nil
 }
 
 func (r *HTTPRow) Err() error {
-	return nil
+	return r.err
 }
 
 func (r *HTTPRow) ScanStruct(dest interface{}) error {
@@ -250,8 +290,24 @@ func (h *HTTPClient) Query(ctx context.Context, query string, args ...interface{
 	// Replace any placeholders in query with args
 	finalQuery := query
 	for i, arg := range args {
-		placeholder := fmt.Sprintf("$%d", i+1)
-		finalQuery = strings.ReplaceAll(finalQuery, placeholder, fmt.Sprintf("'%v'", arg))
+		// Handle both ? and $N placeholders
+		placeholder1 := "?"
+		placeholder2 := fmt.Sprintf("$%d", i+1)
+		
+		// Escape string arguments
+		var argStr string
+		if str, ok := arg.(string); ok {
+			argStr = fmt.Sprintf("'%s'", strings.ReplaceAll(str, "'", "''"))
+		} else {
+			argStr = fmt.Sprintf("%v", arg)
+		}
+		
+		// Replace first occurrence of ? or $N
+		if strings.Contains(finalQuery, placeholder1) {
+			finalQuery = strings.Replace(finalQuery, placeholder1, argStr, 1)
+		} else if strings.Contains(finalQuery, placeholder2) {
+			finalQuery = strings.ReplaceAll(finalQuery, placeholder2, argStr)
+		}
 	}
 	
 	resp, err := h.executeQuery(ctx, finalQuery)
@@ -280,16 +336,25 @@ func (h *HTTPClient) Query(ctx context.Context, query string, args ...interface{
 func (h *HTTPClient) QueryRow(ctx context.Context, query string, args ...interface{}) driver.Row {
 	rows, err := h.Query(ctx, query, args...)
 	if err != nil {
-		return &HTTPRow{data: []string{}}
+		return &HTTPRow{data: []string{}, err: err}
 	}
 	defer rows.Close()
 	
 	if rows.Next() {
 		var data []string
-		// This is a simplified implementation - in practice you'd need to know the column count
-		var col1, col2, col3, col4, col5 string
-		if err := rows.Scan(&col1, &col2, &col3, &col4, &col5); err == nil {
-			data = []string{col1, col2, col3, col4, col5}
+		// Get the first row data - determine number of columns dynamically
+		var col1, col2, col3, col4, col5, col6, col7, col8 string
+		scanArgs := []interface{}{&col1, &col2, &col3, &col4, &col5, &col6, &col7, &col8}
+		
+		if err := rows.Scan(scanArgs...); err == nil {
+			// Only include non-empty columns or up to the actual result
+			data = []string{col1, col2, col3, col4, col5, col6, col7, col8}
+			// Trim trailing empty strings
+			for len(data) > 0 && data[len(data)-1] == "" {
+				data = data[:len(data)-1]
+			}
+		} else {
+			return &HTTPRow{data: []string{}, err: err}
 		}
 		return &HTTPRow{data: data}
 	}
