@@ -35,7 +35,10 @@ A powerful open-source web application for visualizing ClickHouse table relation
 - 📈 Toggle metadata visibility (table rows and size information)
 - 💾 Export diagrams as standalone HTML files
 - 🔒 Secure connection to ClickHouse with TLS support
-- 📱 Responsive web interface for all devices
+- � **Dual Client Architecture**: Switch between native TCP and HTTP clients
+- 🌐 **HTTP Client Support**: Custom HTTP implementation with mTLS
+- 📡 **RESTful API**: Programmatic access to schema information
+- �📱 Responsive web interface for all devices
 
 ## 🏗️ Architecture
 
@@ -98,6 +101,9 @@ A powerful open-source web application for visualizing ClickHouse table relation
    CLICKHOUSE_PASSWORD=
    CLICKHOUSE_DATABASE=default
 
+   # Client Mode Selection (NEW)
+   CLICKHOUSE_USE_HTTP=false
+
    # ClickHouse TLS Settings
    CLICKHOUSE_SECURE=false
    CLICKHOUSE_SKIP_VERIFY=false
@@ -110,6 +116,10 @@ A powerful open-source web application for visualizing ClickHouse table relation
    SERVER_ADDR=:8080
    GIN_MODE=debug
    ```
+
+   **Client Mode Options:**
+   - `CLICKHOUSE_USE_HTTP=false` - Use native TCP client (default, port 9000)
+   - `CLICKHOUSE_USE_HTTP=true` - Use custom HTTP client (port 443, mTLS support)
 
 3. Install Go dependencies:
    ```bash
@@ -144,10 +154,46 @@ A powerful open-source web application for visualizing ClickHouse table relation
 ### 4. Export Diagrams
 - Click "Export HTML" to save the current diagram as an HTML file
 
+## 🔌 API Documentation
+
+The application provides a comprehensive RESTful API for programmatic access to ClickHouse schema information. 
+
+**📖 Full API Documentation: [API.md](API.md)**
+
+### Quick API Reference:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/databases` | GET | List all databases and tables with metadata |
+| `/api/table/:database/:table` | GET | Get detailed column information for a table |
+| `/api/schema/:database/:table` | GET | Get Mermaid.js diagram schema for visualization |
+
+### Client Mode Support:
+The API automatically adapts to your chosen client mode:
+- **Native TCP Mode** (`CLICKHOUSE_USE_HTTP=false`): Uses official ClickHouse driver
+- **HTTP Mode** (`CLICKHOUSE_USE_HTTP=true`): Uses custom HTTP client with mTLS support
+
+### Example Usage:
+```bash
+# Get all databases
+curl "http://localhost:8080/api/databases"
+
+# Get table details
+curl "http://localhost:8080/api/table/default/users"
+
+# Get schema for visualization
+curl "http://localhost:8080/api/schema/default/users"
+```
+
 ## 🔧 How It Works
 
 The application analyzes ClickHouse table structures by querying system tables:
 - `system.tables` to get tables in each database and determine their types
+- `system.columns` to retrieve detailed column information
+
+**Dual Client Architecture:**
+- **Native TCP Client**: Uses the official ClickHouse Go driver for optimal performance
+- **HTTP Client**: Custom implementation using Go's `net/http` with mTLS support for secure environments
 
 Relationships between tables are determined based on column names:
 - Direction of data flow is determined automatically for:
@@ -165,13 +211,13 @@ Relationships between tables are determined based on column names:
 ```
 clickhouse-schemaflow-visualizer/
 ├── api/             # API handlers
-│   └── handlers.go  # API endpoint implementations
+│   └── handlers.go  # RESTful API endpoint implementations
 ├── assets/          # Project assets
 │   └── screenshots/ # Screenshots for documentation
 ├── config/          # Configuration handling
 │   └── config.go    # Environment configuration loader
 ├── models/          # Data models and ClickHouse client
-│   └── clickhouse.go # ClickHouse connection and schema handling
+│   └── clickhouse.go # Dual client architecture (TCP/HTTP)
 ├── static/          # Frontend static files
 │   ├── css/         # CSS styles
 │   │   └── styles.css # Main stylesheet
@@ -181,12 +227,13 @@ clickhouse-schemaflow-visualizer/
 │   └── js/          # JavaScript code
 │       └── app.js   # Main application logic
 ├── .env.example     # Example environment configuration
+├── API.md           # Complete API documentation
 ├── docker-compose.yml # Docker Compose configuration
 ├── Dockerfile       # Docker build instructions
 ├── go.mod           # Go module dependencies
 ├── go.sum           # Go module checksums
-├── main.go          # Application entry point
-└── README.md        # Documentation
+├── main.go          # Application entry point with client selection
+└── README.md        # Project documentation
 ```
 
 ### Building from Source
