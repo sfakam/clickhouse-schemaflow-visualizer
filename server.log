@@ -1,0 +1,35 @@
+nohup: ignoring input
+2025/10/21 13:19:43 Debug mode enabled
+2025/10/21 13:19:43 ClickHouse Configuration:
+2025/10/21 13:19:43   Host: datalake.spock-dart-ord-1.prolexic.com.akadns.net
+2025/10/21 13:19:43   Port: 443
+2025/10/21 13:19:43   User: akadash
+2025/10/21 13:19:43   Password: Hw********************%7
+2025/10/21 13:19:43   Database: owl
+2025/10/21 13:19:43   Secure: true
+2025/10/21 13:19:43   SkipVerify: true
+2025/10/21 13:19:43   UseHTTP: true
+2025/10/21 13:19:43   CertPath: /home/sfathall/.certs/sfathall.crt
+2025/10/21 13:19:43   KeyPath: /home/sfathall/.certs/sfathall.key
+2025/10/21 13:19:43   CAPath: /home/sfathall/.certs/akamai_ca_list.pem
+2025/10/21 13:19:43   ServerName: datalake.spock-dart-ord-1.prolexic.com.akadns.net
+2025/10/21 13:19:43 Using HTTP client for ClickHouse connection
+2025/10/21 13:19:43 Attempting to connect to ClickHouse...
+[GIN-debug] [WARNING] Creating an Engine instance with the Logger and Recovery middleware already attached.
+
+[GIN-debug] [WARNING] Running in "debug" mode. Switch to "release" mode in production.
+ - using env:	export GIN_MODE=release
+ - using code:	gin.SetMode(gin.ReleaseMode)
+
+[GIN-debug] GET    /api/databases            --> github.com/fulgerX2007/clickhouse-schemaflow-visualizer/api.(*Handler).GetDatabases-fm (3 handlers)
+[GIN-debug] GET    /api/schema/:database/:table --> github.com/fulgerX2007/clickhouse-schemaflow-visualizer/api.(*Handler).GetTableSchema-fm (3 handlers)
+[GIN-debug] GET    /api/table/:database/:table --> github.com/fulgerX2007/clickhouse-schemaflow-visualizer/api.(*Handler).GetTableDetails-fm (3 handlers)
+[GIN-debug] GET    /static/*filepath         --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (3 handlers)
+[GIN-debug] HEAD   /static/*filepath         --> github.com/gin-gonic/gin.(*RouterGroup).createStaticHandler.func1 (3 handlers)
+[GIN-debug] GET    /                         --> main.main.(*RouterGroup).StaticFile.func22 (3 handlers)
+[GIN-debug] HEAD   /                         --> main.main.(*RouterGroup).StaticFile.func22 (3 handlers)
+2025/10/21 13:19:43 Server starting on 0.0.0.0:8081 (binding to all interfaces - IPv4)
+2025/10/21 13:19:43 Successfully bound to IPv4 address: 0.0.0.0:8081
+2025/10/21 13:20:03 Querying tables relations
+[GIN] 2025/10/21 - 13:20:07 | 200 |  3.731906671s |       127.0.0.1 | GET      "/api/databases"
+[GIN] 2025/10/21 - 13:20:18 | 200 |     483.179µs |   172.28.40.234 | GET      "/api/databases"

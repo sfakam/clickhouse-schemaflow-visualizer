@@ -2,6 +2,8 @@ package main
 
 import (
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -100,10 +102,33 @@ func main() {
 
 	// Get server address from environment or use default
 	serverAddr := getEnv("SERVER_ADDR", ":8080")
+	
+	// Ensure we bind to all interfaces (both IPv4 and IPv6)
+	if !strings.Contains(serverAddr, ":") {
+		serverAddr = ":" + serverAddr
+	}
+	if strings.HasPrefix(serverAddr, ":") {
+		serverAddr = "0.0.0.0" + serverAddr
+	}
 
-	// Start the server
-	log.Printf("Server starting on %s", serverAddr)
-	if err := router.Run(serverAddr); err != nil {
+	// Start the server with explicit IPv4 binding
+	log.Printf("Server starting on %s (binding to all interfaces - IPv4)", serverAddr)
+	
+	// Create custom HTTP server to force IPv4
+	server := &http.Server{
+		Addr:    serverAddr,
+		Handler: router,
+	}
+	
+	// Create listener with explicit IPv4 ("tcp4")
+	listener, err := net.Listen("tcp4", serverAddr)
+	if err != nil {
+		log.Fatalf("Failed to create IPv4 listener: %v", err)
+	}
+	
+	log.Printf("Successfully bound to IPv4 address: %s", listener.Addr().String())
+	
+	if err := server.Serve(listener); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
