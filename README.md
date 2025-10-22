@@ -227,15 +227,34 @@ clickhouse-schemaflow-visualizer/
 │       └── app.js   # Main application logic
 ├── .env.example     # Example environment configuration
 ├── API.md           # Complete API documentation
+├── bin/             # Compiled binary output (gitignored)
+├── build.sh         # Build script to compile binary
 ├── docker-compose.yml # Docker Compose configuration
 ├── Dockerfile       # Docker build instructions
 ├── go.mod           # Go module dependencies
 ├── go.sum           # Go module checksums
 ├── main.go          # Application entry point with client selection
+├── start.sh         # Start script for running the server
 └── README.md        # Project documentation
 ```
 
 ### Building from Source
+
+#### Local Development Build
+
+1. Build the application:
+   ```bash
+   ./build.sh
+   ```
+
+2. Start the server:
+   ```bash
+   ./start.sh
+   ```
+
+The build script compiles the Go application and places the binary in the `bin/` directory. The start script will check if the binary exists and suggest running the build script if needed.
+
+#### Docker Build
 
 1. Build the Docker image:
    ```bash
