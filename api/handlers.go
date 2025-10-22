@@ -26,6 +26,7 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 		api.GET("/databases", h.GetDatabases)
 		api.GET("/schema/:database/:table", h.GetTableSchema)
 		api.GET("/database/:database/schema", h.GetDatabaseSchema)
+		api.GET("/database/:database/stats", h.GetDatabaseStats)
 		api.GET("/table/:database/:table", h.GetTableDetails)
 	}
 }
@@ -112,4 +113,22 @@ func (h *Handler) GetDatabaseSchema(c *gin.Context) {
 			"metadata": includeMetadata,
 		},
 	})
+}
+
+// GetDatabaseStats returns statistics for a database
+func (h *Handler) GetDatabaseStats(c *gin.Context) {
+	database := c.Param("database")
+
+	if database == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "database parameter is required"})
+		return
+	}
+
+	stats, err := h.clickhouse.GetDatabaseStats(database)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, stats)
 }

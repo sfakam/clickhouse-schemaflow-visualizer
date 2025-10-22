@@ -309,6 +309,7 @@ async function selectDatabase(database) {
     });
     
     selectedDatabase = database;
+    selectedTable = null; // Clear selected table
     
     // Switch to database view if not already
     const databaseRadio = document.getElementById('view-database');
@@ -317,8 +318,12 @@ async function selectDatabase(database) {
         handleViewModeChange();
     }
     
-    // Load the database schema
+    // Update panel header to "Database Info"
+    updatePanelHeader('database');
+    
+    // Load the database schema and stats
     await loadDatabaseSchema(database);
+    await loadDatabaseStats(database);
 }
 
 async function selectTable(tableItem) {
@@ -345,6 +350,9 @@ async function selectTable(tableItem) {
         document.querySelector('input[name="viewMode"][value="table"]').checked = true;
         handleViewModeChange({target: {value: 'table'}});
     }
+
+    // Update panel header to "Table Details"
+    updatePanelHeader('table');
 
     currentSelection.textContent = `${database} / ${table}`;
 
@@ -875,6 +883,23 @@ async function loadTableDetails(database, table) {
     }
 }
 
+async function loadDatabaseStats(database) {
+    if (!database) return;
+
+    try {
+        const response = await fetch(`/api/database/${database}/stats`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const stats = await response.json();
+        renderDatabaseStats(stats);
+    } catch (error) {
+        console.error('Error loading database stats:', error);
+        showTableDetailsError('Failed to load database statistics.');
+    }
+}
+
 function renderTableDetails(details) {
     if (!details) {
         showTableDetailsError('No table details available.');
@@ -960,6 +985,76 @@ function showTableDetailsError(message) {
     `;
 }
 
+function renderDatabaseStats(stats) {
+    if (!stats) {
+        showTableDetailsError('No database statistics available.');
+        return;
+    }
+
+    const formatBytes = (bytes) => {
+        if (!bytes) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let size = bytes;
+        let unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex++;
+        }
+        return `${size.toFixed(1)} ${units[unitIndex]}`;
+    };
+
+    const formatRows = (rows) => {
+        if (!rows) return '0';
+        return rows.toLocaleString();
+    };
+
+    // Sort engines by count (descending)
+    const engines = Object.entries(stats.engine_counts || {})
+        .sort((a, b) => b[1].count - a[1].count);
+
+    const html = `
+        <div class="table-info">
+            <h4><i class="fa-solid fa-database"></i> Database Details</h4>
+            <div class="table-info-grid">
+                <span class="table-info-label">Database:</span>
+                <span class="table-info-value">${stats.database}</span>
+                <span class="table-info-label">Total Tables:</span>
+                <span class="table-info-value">${stats.total_tables}</span>
+                <span class="table-info-label">Total Rows:</span>
+                <span class="table-info-value">${formatRows(stats.total_rows)}</span>
+                <span class="table-info-label">Total Size:</span>
+                <span class="table-info-value">${formatBytes(stats.total_bytes)}</span>
+            </div>
+        </div>
+        
+        <div class="columns-section">
+            <h4><i class="fa-solid fa-cogs"></i> Table Engines (${engines.length})</h4>
+            <table class="columns-table">
+                <thead>
+                    <tr>
+                        <th>Engine</th>
+                        <th>Count</th>
+                        <th>Rows</th>
+                        <th>Size</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${engines.map(([engine, engineStats]) => `
+                        <tr>
+                            <td class="column-name">${engine}</td>
+                            <td>${engineStats.count}</td>
+                            <td>${formatRows(engineStats.total_rows)}</td>
+                            <td>${formatBytes(engineStats.total_bytes)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    tableDetailsContent.innerHTML = html;
+}
+
 function copyCreateQuery(button) {
     const codeElement = button.parentElement.querySelector('code');
     const createQuery = codeElement.textContent;
@@ -1002,6 +1097,21 @@ function showNoTableSelected() {
     tableDetailsContent.innerHTML = '<p class="no-table-selected">Select a table to view its details</p>';
 }
 
+function showNoDatabaseSelected() {
+    tableDetailsContent.innerHTML = '<p class="no-table-selected">Select a database to view its statistics</p>';
+}
+
+function updatePanelHeader(mode) {
+    const headerElement = document.querySelector('.table-details-header h3');
+    if (headerElement) {
+        if (mode === 'database') {
+            headerElement.innerHTML = '<i class="fa-solid fa-database"></i> Database Info';
+        } else {
+            headerElement.innerHTML = '<i class="fa-solid fa-table"></i> Table Details';
+        }
+    }
+}
+
 function showError(message) {
     alert(message);
 }
@@ -1016,15 +1126,25 @@ function handleViewModeChange(event) {
     
     if (viewMode === 'database') {
         engineFilters.style.display = 'flex';
+        // Update panel header to "Database Info"
+        updatePanelHeader('database');
+        // Clear the details panel with appropriate message
+        showNoDatabaseSelected();
         // Switch to database view mode
         if (selectedDatabase) {
             loadDatabaseSchema(selectedDatabase);
+            loadDatabaseStats(selectedDatabase);
         }
     } else {
         engineFilters.style.display = 'none';
+        // Update panel header to "Table Details"
+        updatePanelHeader('table');
+        // Clear the details panel with appropriate message
+        showNoTableSelected();
         // Switch back to table view mode
         if (selectedDatabase && selectedTable) {
             loadTableSchema(selectedDatabase, selectedTable);
+            loadTableDetails(selectedDatabase, selectedTable);
         }
     }
 }
@@ -1082,9 +1202,6 @@ async function loadDatabaseSchema(database) {
         
         // Update current selection display - just show database name
         currentSelection.textContent = `Database: ${database}`;
-        
-        // Clear table details for database view
-        showNoTableSelected();
         
         // Set the current schema and render
         currentSchema = data.schema;

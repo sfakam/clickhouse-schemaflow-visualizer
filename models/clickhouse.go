@@ -73,6 +73,22 @@ type TableDetails struct {
 	CreateQuery string       `json:"create_query"`
 }
 
+// DatabaseStats represents statistics for a database
+type DatabaseStats struct {
+	Database     string                 `json:"database"`
+	TotalTables  int                    `json:"total_tables"`
+	TotalRows    uint64                 `json:"total_rows"`
+	TotalBytes   uint64                 `json:"total_bytes"`
+	EngineCounts map[string]EngineStats `json:"engine_counts"`
+}
+
+// EngineStats represents statistics for a specific engine type
+type EngineStats struct {
+	Count      int    `json:"count"`
+	TotalRows  uint64 `json:"total_rows"`
+	TotalBytes uint64 `json:"total_bytes"`
+}
+
 // CachedTableData represents comprehensive table information from a single query
 type CachedTableData struct {
 	Name                        string
@@ -989,6 +1005,54 @@ func (c *ClickHouseClient) GetDatabases() (map[string]map[string]string, error) 
 	defer c.cache.mutex.RUnlock()
 
 	return c.cache.DatabasesMap, nil
+}
+
+// GetDatabaseStats returns statistics for a specific database
+func (c *ClickHouseClient) GetDatabaseStats(dbName string) (*DatabaseStats, error) {
+	if err := c.refreshTableCache(); err != nil {
+		return nil, fmt.Errorf("failed to refresh table cache: %v", err)
+	}
+
+	c.cache.mutex.RLock()
+	defer c.cache.mutex.RUnlock()
+
+	stats := &DatabaseStats{
+		Database:     dbName,
+		TotalTables:  0,
+		TotalRows:    0,
+		TotalBytes:   0,
+		EngineCounts: make(map[string]EngineStats),
+	}
+
+	// Iterate through all tables in the cache for this database
+	for _, tableData := range c.cache.Tables {
+		if tableData.Database != dbName {
+			continue
+		}
+
+		stats.TotalTables++
+
+		// Add rows and bytes to totals (if available)
+		if tableData.TotalRows != nil {
+			stats.TotalRows += *tableData.TotalRows
+		}
+		if tableData.TotalBytes != nil {
+			stats.TotalBytes += *tableData.TotalBytes
+		}
+
+		// Track engine statistics
+		engineStats := stats.EngineCounts[tableData.Engine]
+		engineStats.Count++
+		if tableData.TotalRows != nil {
+			engineStats.TotalRows += *tableData.TotalRows
+		}
+		if tableData.TotalBytes != nil {
+			engineStats.TotalBytes += *tableData.TotalBytes
+		}
+		stats.EngineCounts[tableData.Engine] = engineStats
+	}
+
+	return stats, nil
 }
 
 // GenerateMermaidSchema generates a Mermaid schema for a table and its relationships
