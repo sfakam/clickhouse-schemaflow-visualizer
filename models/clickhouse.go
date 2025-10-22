@@ -842,6 +842,375 @@ func (c *ClickHouseClient) getRelationsBack(sb *strings.Builder, tablesRelations
 	}
 }
 
+// GenerateDatabaseMermaidSchema generates a comprehensive Mermaid schema for an entire database
+func (c *ClickHouseClient) GenerateDatabaseMermaidSchema(dbName string, engineFilters []string, includeMetadata bool) (string, error) {
+	// Get all tables in the database
+	databases, err := c.GetDatabases()
+	if err != nil {
+		return "", fmt.Errorf("failed to get databases: %v", err)
+	}
+
+	// Check if database exists
+	tablesMap, exists := databases[dbName]
+	if !exists {
+		return "", fmt.Errorf("database '%s' not found", dbName)
+	}
+
+	// Get table relations
+	tablesRelations, err := c.getTablesRelations()
+	if err != nil {
+		return "", fmt.Errorf("failed to get table relations: %v", err)
+	}
+
+	// Start building the Mermaid schema
+	var sb strings.Builder
+	sb.WriteString("flowchart LR\n")
+	sb.WriteString("    %% Database: " + dbName + "\n\n")
+
+	// Create a map to store engine types and their styles
+	engineStyles := map[string]string{
+		"MergeTree":                "#1f77b4", // Blue
+		"ReplicatedMergeTree":      "#ff7f0e", // Orange  
+		"SummingMergeTree":         "#2ca02c", // Green
+		"ReplacingMergeTree":       "#d62728", // Red
+		"AggregatingMergeTree":     "#9467bd", // Purple
+		"CollapsingMergeTree":      "#8c564b", // Brown
+		"VersionedCollapsingMergeTree": "#e377c2", // Pink
+		"GraphiteMergeTree":        "#7f7f7f", // Gray
+		"MaterializedView":         "#bcbd22", // Olive
+		"View":                     "#17becf", // Cyan
+		"Dictionary":               "#ffbb78", // Light Orange
+		"Distributed":              "#ff9896", // Light Red
+		"Memory":                   "#c5b0d5", // Light Purple
+		"Log":                      "#c7c7c7", // Light Gray
+		"TinyLog":                  "#dbdb8d", // Light Olive
+		"StripeLog":                "#9edae5", // Light Cyan
+	}
+
+	engineIcons := map[string]string{
+		"MergeTree":                "fa-solid fa-database",
+		"ReplicatedMergeTree":      "fa-solid fa-copy",
+		"SummingMergeTree":         "fa-solid fa-calculator",
+		"ReplacingMergeTree":       "fa-solid fa-sync-alt",
+		"AggregatingMergeTree":     "fa-solid fa-chart-bar",
+		"CollapsingMergeTree":      "fa-solid fa-compress",
+		"VersionedCollapsingMergeTree": "fa-solid fa-code-branch",
+		"GraphiteMergeTree":        "fa-solid fa-chart-line",
+		"MaterializedView":         "fa-solid fa-eye",
+		"View":                     "fa-solid fa-search",
+		"Dictionary":               "fa-solid fa-book",
+		"Distributed":              "fa-solid fa-share-alt",
+		"Memory":                   "fa-solid fa-memory",
+		"Log":                      "fa-solid fa-file-text",
+		"TinyLog":                  "fa-solid fa-file",
+		"StripeLog":                "fa-solid fa-stream",
+	}
+
+	// Track processed tables and their engine types
+	processedTables := make(map[string]bool)
+	engineCounts := make(map[string]int)
+
+	// Get engine information for all tables in the database
+	tableEngines, err := c.getTableEngines(dbName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get table engines: %v", err)
+	}
+
+	// Collect all unique table names from relations data for this database
+	allDatabaseTables := make(map[string]string) // Maps relation table name to clean table name
+	
+	for _, relation := range tablesRelations {
+		// Check both Table and DependsOnTable fields
+		for _, relationTableName := range []string{relation.Table, relation.DependsOnTable} {
+			if relationTableName != "" {
+				// Check if this table belongs to our target database
+				if strings.HasPrefix(relationTableName, dbName+".") || strings.HasPrefix(relationTableName, dbName+"\\.") {
+					// Extract clean table name for engine lookup
+					cleanTableName := relationTableName
+					
+					// Remove database prefix
+					if strings.HasPrefix(cleanTableName, dbName+"\\.") {
+						// Handle escaped format: "owl\.table_name\"
+						cleanTableName = strings.TrimPrefix(cleanTableName, dbName+"\\.")
+						cleanTableName = strings.ReplaceAll(cleanTableName, "\\", "")
+					} else {
+						// Handle normal format: "owl.table_name"
+						cleanTableName = strings.TrimPrefix(cleanTableName, dbName+".")
+					}
+					
+					// Remove any remaining backticks
+					cleanTableName = strings.ReplaceAll(cleanTableName, "`", "")
+					
+					// Only include if the clean table exists in system.tables
+					if _, exists := tablesMap[cleanTableName]; exists {
+						allDatabaseTables[relationTableName] = cleanTableName
+					}
+				}
+			}
+		}
+	}
+
+	// Process each table from relations data that also exists in system.tables  
+	for relationTableName, cleanTableName := range allDatabaseTables {
+		// Get engine type from the database query
+		engineType, exists := tableEngines[cleanTableName]
+		if !exists {
+			engineType = "Unknown"
+		}
+		
+		// Apply engine filter if specified
+		if len(engineFilters) > 0 && !c.containsEngine(engineFilters, engineType) {
+			continue
+		}
+
+		engineCounts[engineType]++
+
+		// Generate node content
+		var nodeContent string
+		if includeMetadata {
+			nodeContent = c.generateTableNodeContent(relationTableName)
+		} else {
+			nodeContent = cleanTableName
+		}
+
+		// Format table name for better display (add line breaks for long names)
+		displayName := cleanTableName
+		if len(cleanTableName) > 25 {
+			// Add line breaks every 25 characters at underscores or other separators
+			displayName = c.formatLongTableName(cleanTableName)
+		}
+
+		// Add engine icon
+		if icon, exists := engineIcons[engineType]; exists {
+			nodeContent = fmt.Sprintf("<i class=\"%s\"></i> %s<br><small>%s</small>", icon, displayName, engineType)
+		} else {
+			nodeContent = fmt.Sprintf("%s<br><small>%s</small>", displayName, engineType)
+		}
+
+		// Create node using the relation table name for consistent hashing
+		nodeId := city.Hash32([]byte(relationTableName))
+		sb.WriteString(fmt.Sprintf("    %d[\"%s\"]\n", nodeId, nodeContent))
+
+		// Apply styling based on engine type
+		if color, exists := engineStyles[engineType]; exists {
+			sb.WriteString(fmt.Sprintf("    style %d fill:%s,stroke:#333,stroke-width:2px,color:#fff\n", nodeId, color))
+		}
+
+		processedTables[relationTableName] = true
+	}
+
+	sb.WriteString("\n    %% Relationships\n")
+
+	// Track seen relationships to avoid duplicates
+	seenRelationships := make(map[string]bool)
+
+	// Add relationships between tables in this database - explore all relationships recursively
+	for relationTableName := range processedTables {
+		// Get all relationships for this table (both forward and backward)
+		c.getDatabaseRelationsNext(&sb, tablesRelations, relationTableName, &seenRelationships, processedTables)
+		c.getDatabaseRelationsBack(&sb, tablesRelations, relationTableName, &seenRelationships, processedTables)
+	}
+
+	// Add legend for engine types
+	if len(engineCounts) > 0 {
+		sb.WriteString("\n    %% Legend\n")
+		legendId := 999999
+		for engineType, count := range engineCounts {
+			if icon, exists := engineIcons[engineType]; exists {
+				legendContent := fmt.Sprintf("<i class=\"%s\"></i> %s (%d)", icon, engineType, count)
+				sb.WriteString(fmt.Sprintf("    %d[\"%s\"]\n", legendId, legendContent))
+				if color, exists := engineStyles[engineType]; exists {
+					sb.WriteString(fmt.Sprintf("    style %d fill:%s,stroke:#333,stroke-width:1px,color:#fff\n", legendId, color))
+				}
+				legendId++
+			}
+		}
+	}
+
+	return sb.String(), nil
+}
+
+// getDatabaseRelationsNext recursively finds forward relationships for database view
+func (c *ClickHouseClient) getDatabaseRelationsNext(sb *strings.Builder, tablesRelations []TableRelation, table string, seen *map[string]bool, processedTables map[string]bool) {
+	for _, rel := range tablesRelations {
+		if rel.DependsOnTable == table && table != "" {
+			// Only include if both tables are in processed list (pass engine filters)
+			if processedTables[rel.DependsOnTable] && processedTables[rel.Table] {
+				sourceId := city.Hash32([]byte(rel.DependsOnTable))
+				targetId := city.Hash32([]byte(rel.Table))
+				
+				relationshipKey := fmt.Sprintf("%d-->%d", sourceId, targetId)
+				if !(*seen)[relationshipKey] {
+					(*seen)[relationshipKey] = true
+					relationshipType := c.getRelationshipType(rel)
+					sb.WriteString(fmt.Sprintf("    %d %s %d\n", sourceId, relationshipType, targetId))
+				}
+				// Recursively explore further
+				c.getDatabaseRelationsNext(sb, tablesRelations, rel.Table, seen, processedTables)
+			}
+		}
+	}
+}
+
+// getDatabaseRelationsBack recursively finds backward relationships for database view
+func (c *ClickHouseClient) getDatabaseRelationsBack(sb *strings.Builder, tablesRelations []TableRelation, table string, seen *map[string]bool, processedTables map[string]bool) {
+	for _, rel := range tablesRelations {
+		if rel.Table == table && rel.DependsOnTable != "" {
+			// Only include if both tables are in processed list (pass engine filters)
+			if processedTables[rel.DependsOnTable] && processedTables[rel.Table] {
+				sourceId := city.Hash32([]byte(rel.DependsOnTable))
+				targetId := city.Hash32([]byte(rel.Table))
+				
+				relationshipKey := fmt.Sprintf("%d-->%d", sourceId, targetId)
+				if !(*seen)[relationshipKey] {
+					(*seen)[relationshipKey] = true
+					relationshipType := c.getRelationshipType(rel)
+					sb.WriteString(fmt.Sprintf("    %d %s %d\n", sourceId, relationshipType, targetId))
+				}
+				// Recursively explore further
+				c.getDatabaseRelationsBack(sb, tablesRelations, rel.DependsOnTable, seen, processedTables)
+			}
+		}
+	}
+}
+
+// Helper function to extract engine type from HTML string
+func (c *ClickHouseClient) extractEngineFromHTML(htmlString string) string {
+	// This is a simplified extraction - you might need to adjust based on your HTML format
+	// Looking for patterns like "ReplicatedMergeTree", "MergeTree", etc.
+	engines := []string{
+		"ReplicatedMergeTree", "MergeTree", "SummingMergeTree", "ReplacingMergeTree",
+		"AggregatingMergeTree", "CollapsingMergeTree", "VersionedCollapsingMergeTree",
+		"GraphiteMergeTree", "MaterializedView", "View", "Dictionary", "Distributed",
+		"Memory", "TinyLog", "StripeLog", "Log",
+	}
+	
+	htmlLower := strings.ToLower(htmlString)
+	for _, engine := range engines {
+		if strings.Contains(htmlLower, strings.ToLower(engine)) {
+			return engine
+		}
+	}
+	return "Unknown"
+}
+
+// Helper function to check if engine is in filter list
+func (c *ClickHouseClient) containsEngine(filters []string, engineType string) bool {
+	if len(filters) == 0 {
+		return true
+	}
+	for _, filter := range filters {
+		if strings.EqualFold(filter, engineType) {
+			return true
+		}
+	}
+	return false
+}
+
+// getTableEngines returns a map of table names to their engine types for a specific database
+func (c *ClickHouseClient) getTableEngines(dbName string) (map[string]string, error) {
+	query := `
+		SELECT name, engine 
+		FROM system.tables 
+		WHERE database = ?
+	`
+	
+	rows, err := c.conn.Query(context.Background(), query, dbName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query system.tables: %v", err)
+	}
+	defer rows.Close()
+
+	tableEngines := make(map[string]string)
+	for rows.Next() {
+		var tableName, engine string
+		if err := rows.Scan(&tableName, &engine); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %v", err)
+		}
+		tableEngines[tableName] = engine
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %v", err)
+	}
+
+	return tableEngines, nil
+}
+
+// formatLongTableName breaks long table names into multiple lines for better display
+func (c *ClickHouseClient) formatLongTableName(tableName string) string {
+	if len(tableName) <= 25 {
+		return tableName
+	}
+
+	// Try to break at natural separators like underscores, dots, or camelCase
+	words := strings.FieldsFunc(tableName, func(r rune) bool {
+		return r == '_' || r == '.' || r == '-'
+	})
+
+	if len(words) <= 1 {
+		// No natural separators, break every 25 characters
+		var result strings.Builder
+		for i, char := range tableName {
+			if i > 0 && i%25 == 0 {
+				result.WriteString("<br>")
+			}
+			result.WriteRune(char)
+		}
+		return result.String()
+	}
+
+	// Reconstruct with line breaks, trying to keep lines under 25 chars
+	var result strings.Builder
+	currentLine := ""
+	separator := "_" // Use the most common separator found
+
+	for _, word := range words {
+		testLine := word
+		if currentLine != "" {
+			testLine = currentLine + separator + word
+		}
+
+		if len(testLine) > 25 && currentLine != "" {
+			// Start new line
+			if result.Len() > 0 {
+				result.WriteString("<br>")
+			}
+			result.WriteString(currentLine)
+			currentLine = word
+		} else {
+			currentLine = testLine
+		}
+	}
+
+	// Add the last line
+	if currentLine != "" {
+		if result.Len() > 0 {
+			result.WriteString("<br>")
+		}
+		result.WriteString(currentLine)
+	}
+
+	return result.String()
+}
+
+// Helper function to determine relationship type for Mermaid arrows
+func (c *ClickHouseClient) getRelationshipType(relation TableRelation) string {
+	// Different arrow types based on relationship
+	switch {
+	case strings.Contains(strings.ToLower(relation.Icon), "materialized"):
+		return "-.->|materialized|"
+	case strings.Contains(strings.ToLower(relation.Icon), "distributed"):
+		return "==>|distributed|"
+	case strings.Contains(strings.ToLower(relation.Icon), "replicated"):
+		return "-->|replicated|"
+	case strings.Contains(strings.ToLower(relation.Icon), "dictionary"):
+		return "..->|dictionary|"
+	default:
+		return "-->|depends|"
+	}
+}
+
 // GetTableColumns returns detailed column information for a specific table
 func (c *ClickHouseClient) GetTableColumns(database, table string) (*TableDetails, error) {
 	ctx := context.Background()

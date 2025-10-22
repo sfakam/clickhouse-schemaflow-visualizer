@@ -45,6 +45,26 @@
 
             <div class="main-panel">
                 <div class="toolbar">
+                    <div class="view-mode-selector">
+                        <label>
+                            <input type="radio" name="viewMode" value="table" id="view-table" checked> Table View
+                        </label>
+                        <label>
+                            <input type="radio" name="viewMode" value="database" id="view-database"> Database View
+                        </label>
+                    </div>
+                    <div class="engine-filters" id="engine-filters" style="display: none;">
+                        <label>Engines:</label>
+                        <div class="engine-checkboxes">
+                            <label><input type="checkbox" value="MergeTree" checked> MergeTree</label>
+                            <label><input type="checkbox" value="ReplicatedMergeTree" checked> Replicated</label>
+                            <label><input type="checkbox" value="MaterializedView" checked> MaterializedView</label>
+                            <label><input type="checkbox" value="Dictionary" checked> Dictionary</label>
+                            <label><input type="checkbox" value="Distributed" checked> Distributed</label>
+                            <label><input type="checkbox" value="View" checked> View</label>
+                        </div>
+                        <button id="apply-filters-btn">Apply Filters</button>
+                    </div>
                     <span id="current-selection"></span>
                     <div class="export-buttons">
                         <button id="export-html-btn">Export HTML</button>

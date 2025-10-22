@@ -109,6 +109,12 @@ main {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    transition: background-color 0.2s;
+}
+
+.tree-view .database:hover {
+    background-color: #f0f0f0;
+    border-radius: 3px;
 }
 
 .tree-view .database::after {
@@ -138,8 +144,14 @@ main {
 }
 
 .tree-view .table.selected {
-    background-color: #007bff;
-    color: #fff;
+    background-color: #0078d4;
+    color: white;
+}
+
+.database.selected {
+    background-color: #0078d4;
+    color: white;
+    font-weight: bold;
 }
 
 .legend-container {
@@ -263,6 +275,72 @@ main {
 
 .export-buttons button:hover {
     background-color: #0069d9;
+}
+
+/* View mode selector styling */
+.view-mode-selector {
+    display: flex;
+    gap: 1rem;
+}
+
+.view-mode-selector label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.view-mode-selector input[type="radio"] {
+    margin-right: 0.5rem;
+}
+
+/* Engine filters styling */
+.engine-filters {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+.engine-filters label {
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.engine-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.engine-checkboxes label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.engine-checkboxes input[type="checkbox"] {
+    margin-right: 0.4rem;
+}
+
+#apply-filters-btn {
+    padding: 0.4rem 0.8rem;
+    background-color: #28a745;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+#apply-filters-btn:hover {
+    background-color: #218838;
 }
 
 /* View controls (zoom buttons) styling */
@@ -556,4 +634,61 @@ small {
 /* Show metadata when toggle is active */
 .metadata-visible .tree-view .table small {
     display: block;
+}
+
+/* Mermaid diagram node sizing - larger boxes for long content */
+.mermaid .node rect {
+    min-width: 200px !important;
+    min-height: 60px !important;
+    rx: 5px !important;
+    ry: 5px !important;
+}
+
+/* Ensure text is visible and properly styled */
+.mermaid .nodeLabel,
+.mermaid .node .label,
+.mermaid .label {
+    font-size: 12px !important;
+    line-height: 1.3 !important;
+    color: #333 !important;
+    fill: #333 !important;
+    text-anchor: middle !important;
+    dominant-baseline: middle !important;
+    visibility: visible !important;
+    display: block !important;
+    white-space: pre-line !important;
+}
+
+/* Foreign object for HTML content */
+.mermaid .node foreignObject {
+    width: 200px !important;
+    height: 60px !important;
+    color: #333 !important;
+}
+
+.mermaid .node foreignObject div {
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    padding: 8px !important;
+    box-sizing: border-box !important;
+    font-size: 12px !important;
+    color: #333 !important;
+    line-height: 1.3 !important;
+}
+
+/* Improve spacing between nodes */
+.mermaid svg {
+    width: 100% !important;
+    height: auto !important;
+}
+
+/* Make sure text elements are visible */
+.mermaid text {
+    fill: #333 !important;
+    font-size: 12px !important;
+    font-family: "trebuchet ms", verdana, arial, sans-serif !important;
 }

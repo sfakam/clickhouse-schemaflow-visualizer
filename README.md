@@ -134,25 +134,24 @@ A powerful open-source web application for visualizing ClickHouse table relation
 
 5. Access the web interface at http://localhost:8080
 
-## 📖 Usage
+## Usage
 
-### 1. Browse Databases and Tables
-- The left panel displays all available databases and tables
-- Click on a database to expand/collapse its tables
-- Click on a table to view its schema
+1. Start the server:
+   ```bash
+   go run main.go
+   ```
 
-### 2. Toggle Table Metadata
-- Use the "Show Metadata" toggle switch below the Table Types section
-- When enabled, displays table statistics (row count and size) under each table name
-- Metadata is hidden by default for a cleaner interface
-- Your preference is automatically saved and restored
+2. Open your browser and navigate to `http://localhost:8080`
 
-### 3. View Table Relationships
-- Select a table to see its relationships with other tables
-- The diagram shows the table structure and relationships
+3. Browse through the database tree on the left to see your ClickHouse databases and tables
 
-### 4. Export Diagrams
-- Click "Export HTML" to save the current diagram as an HTML file
+4. **Table View**: Click on any table to view its individual schema diagram
+
+5. **Database View**: 
+   - Hold Shift or Ctrl and click on a database name to view the entire database schema
+   - Use the "View Mode" selector in the toolbar to switch between Table and Database views
+   - Use the engine filters to show/hide specific table types (MergeTree, Replicated, MaterializedView, Dictionary, etc.)
+   - The database view shows all tables in the database with relationships and color-coded engine types
 
 ## 🔌 API Documentation
 

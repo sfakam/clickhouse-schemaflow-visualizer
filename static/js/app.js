@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
             htmlLabels: true
         }
     });
-    console.log("Mermaid initialized successfully");
 
     loadDatabases();
 
@@ -37,6 +36,21 @@ document.addEventListener('DOMContentLoaded', () => {
     zoomInBtn.addEventListener('click', zoomIn);
     zoomOutBtn.addEventListener('click', zoomOut);
     resetZoomBtn.addEventListener('click', resetZoom);
+    
+    // Setup view mode selector
+    const viewModeRadios = document.querySelectorAll('input[name="viewMode"]');
+    viewModeRadios.forEach(radio => {
+        radio.addEventListener('change', handleViewModeChange);
+    });
+    
+    // Initialize database click hints
+    updateDatabaseClickHints('table'); // Default to table view
+    
+    // Setup engine filters
+    const applyFiltersBtn = document.getElementById('apply-filters-btn');
+    if (applyFiltersBtn) {
+        applyFiltersBtn.addEventListener('click', applyEngineFilters);
+    }
     
     // Setup collapsible Database header section
     const databaseHeader = document.getElementById('database-header');
@@ -131,7 +145,18 @@ function renderDatabaseTree() {
             dbSpan.textContent = dbName;
             dbSpan.dataset.count = tableCount;
             
-            dbSpan.addEventListener('click', () => toggleDatabase(dbItem));
+            dbSpan.addEventListener('click', (e) => {
+                // Check current view mode
+                const selectedViewMode = document.querySelector('input[name="viewMode"]:checked').value;
+                
+                if (selectedViewMode === 'database') {
+                    // In database view mode, select database for schema view
+                    selectDatabase(dbName);
+                } else {
+                    // In table view mode, toggle database tables
+                    toggleDatabase(dbItem);
+                }
+            });
 
             dbItem.appendChild(dbSpan);
 
@@ -167,7 +192,20 @@ function renderDatabaseTree() {
             
             dbSpan.textContent = db.name || db.toString();
             dbSpan.dataset.count = tableCount;
-            dbSpan.addEventListener('click', () => toggleDatabase(dbItem));
+            dbSpan.addEventListener('click', (e) => {
+                const dbName = db.name || db.toString();
+                
+                // Check current view mode
+                const selectedViewMode = document.querySelector('input[name="viewMode"]:checked').value;
+                
+                if (selectedViewMode === 'database') {
+                    // In database view mode, select database for schema view
+                    selectDatabase(dbName);
+                } else {
+                    // In table view mode, toggle database tables
+                    toggleDatabase(dbItem);
+                }
+            });
             dbItem.appendChild(dbSpan);
 
             const tablesList = document.createElement('ul');
@@ -200,6 +238,10 @@ function renderDatabaseTree() {
         console.error('Unexpected databases structure:', databases);
         showError('The database structure is not in the expected format.');
     }
+    
+    // Update database click hints based on current view mode
+    const currentViewMode = document.querySelector('input[name="viewMode"]:checked').value;
+    updateDatabaseClickHints(currentViewMode);
 }
 
 function addTableToList(tablesList, dbName, dbTable, showTableName) {
@@ -224,6 +266,39 @@ function toggleDatabase(dbItem) {
     }
 }
 
+async function selectDatabase(database) {
+    // Clear any selected table
+    const previouslySelected = document.querySelector('.table.selected');
+    if (previouslySelected) {
+        previouslySelected.classList.remove('selected');
+    }
+    
+    // Highlight selected database
+    const previouslySelectedDb = document.querySelector('.database.selected');
+    if (previouslySelectedDb) {
+        previouslySelectedDb.classList.remove('selected');
+    }
+    
+    const allDbSpans = document.querySelectorAll('.database');
+    allDbSpans.forEach(span => {
+        if (span.textContent.trim() === database) {
+            span.classList.add('selected');
+        }
+    });
+    
+    selectedDatabase = database;
+    
+    // Switch to database view if not already
+    const databaseRadio = document.getElementById('view-database');
+    if (databaseRadio && !databaseRadio.checked) {
+        databaseRadio.checked = true;
+        handleViewModeChange();
+    }
+    
+    // Load the database schema
+    await loadDatabaseSchema(database);
+}
+
 async function selectTable(tableItem) {
     const previouslySelected = document.querySelector('.table.selected');
     if (previouslySelected) {
@@ -232,16 +307,27 @@ async function selectTable(tableItem) {
 
     tableItem.classList.add('selected');
 
-    selectedDatabase = tableItem.dataset.database;
-    selectedTable = tableItem.dataset.table;
+    const database = tableItem.dataset.database;
+    const table = tableItem.dataset.table;
+    
+    selectedDatabase = database;
+    selectedTable = table;
 
     // Reset zoom level when selecting a new table
     currentZoomLevel = 1;
 
-    currentSelection.textContent = `${selectedDatabase} / ${selectedTable}`;
+    const selectedViewMode = document.querySelector('input[name="viewMode"]:checked').value;
+    
+    if (selectedViewMode === 'database') {
+        // In database view, selecting a table switches to table view
+        document.querySelector('input[name="viewMode"][value="table"]').checked = true;
+        handleViewModeChange({target: {value: 'table'}});
+    }
+
+    currentSelection.textContent = `${database} / ${table}`;
 
     await loadTableSchema();
-    await loadTableDetails(selectedDatabase, selectedTable);
+    await loadTableDetails(database, table);
 }
 
 async function loadTableSchema() {
@@ -266,32 +352,26 @@ async function loadTableSchema() {
 
 function formatMermaidSchema(schema) {
     if (!schema || typeof schema !== 'string') return schema;
-
-    console.log("Original schema:", schema);
-
     return schema;
 }
 
 function renderSchema() {
-    if (!currentSchema) return;
+    if (!currentSchema) {
+        return;
+    }
 
     const formattedSchema = formatMermaidSchema(currentSchema);
 
-    console.log("Formatted schema to render:", formattedSchema);
-
     if (typeof mermaid === 'undefined') {
-        console.error("Mermaid is not defined when trying to render schema. Waiting for it to load...");
         showError("Diagram library is loading. Please wait a moment and try again.");
 
         const mermaidRenderInterval = setInterval(() => {
             if (typeof mermaid !== 'undefined') {
                 clearInterval(mermaidRenderInterval);
                 try {
-                    console.log("Mermaid now available. Initializing with schema:", formattedSchema);
                     renderMermaidDiagram(formattedSchema);
                 } catch (error) {
-                    console.error("Error during Mermaid initialization after waiting:", error);
-                    showError("Failed to render diagram. Check console for details.");
+                    showError("Failed to render diagram.");
                 }
             }
         }, 100);
@@ -301,8 +381,7 @@ function renderSchema() {
     try {
         renderMermaidDiagram(formattedSchema);
     } catch (error) {
-        console.error("Error during Mermaid initialization:", error);
-        showError("Failed to render diagram. Check console for details.");
+        showError("Failed to render diagram.");
     }
 }
 
@@ -314,34 +393,56 @@ function renderMermaidDiagram(schema) {
     container.textContent = schema;
     schemaDiagram.appendChild(container);
 
-    console.log("Rendering Mermaid diagram with schema:", schema);
-
     try {
         mermaid.initialize({
             startOnLoad: false,
-            theme: 'default',
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#ECECFF',
+                primaryTextColor: '#333333',
+                primaryBorderColor: '#9370DB',
+                lineColor: '#333333',
+                secondaryColor: '#ffffff',
+                tertiaryColor: '#ffffff',
+                background: '#ffffff',
+                fontFamily: 'trebuchet ms, verdana, arial, sans-serif',
+                fontSize: '12px'
+            },
             securityLevel: 'loose',
             flowchart: {
                 useMaxWidth: true,
-                htmlLabels: true
+                htmlLabels: true,
+                padding: 15,
+                nodeSpacing: 50,
+                rankSpacing: 80,
+                curve: 'linear'
             },
             er: {
                 diagramPadding: 20,
                 layoutDirection: 'TB',
-                minEntityWidth: 100,
-                minEntityHeight: 75,
-                entityPadding: 15
+                minEntityWidth: 150,
+                minEntityHeight: 100,
+                entityPadding: 20
             }
         });
 
         mermaid.init(undefined, '.mermaid');
-        console.log("Mermaid initialization successful");
+        
+        // Check if the SVG was properly rendered
+        setTimeout(() => {
+            const svg = schemaDiagram.querySelector('svg');
+            if (svg) {
+                const width = svg.style.maxWidth || svg.getAttribute('width');
+                if (width === '16px' || !svg.querySelector('.nodes').hasChildNodes()) {
+                    showRawSchema(schema);
+                }
+            }
+        }, 100);
         
         applyZoom();
         
         setupMouseWheelZoom();
     } catch (error) {
-        console.error("Error during Mermaid initialization:", error);
         // Fallback to show raw schema
         showRawSchema(schema);
     }
@@ -354,6 +455,7 @@ function showRawSchema(schema) {
     rawSchemaDisplay.style.fontFamily = 'monospace';
     rawSchemaDisplay.style.padding = '10px';
     rawSchemaDisplay.style.border = '1px solid #ccc';
+    rawSchemaDisplay.style.backgroundColor = '#f5f5f5';
     rawSchemaDisplay.textContent = schema;
     schemaDiagram.appendChild(rawSchemaDisplay);
     showError("Failed to render diagram. Showing raw schema instead.");
@@ -859,4 +961,93 @@ function showNoTableSelected() {
 
 function showError(message) {
     alert(message);
+}
+
+// Handle view mode changes (Table vs Database view)
+function handleViewModeChange(event) {
+    const viewMode = event ? event.target.value : document.querySelector('input[name="viewMode"]:checked').value;
+    const engineFilters = document.getElementById('engine-filters');
+    
+    // Update database click behavior hints
+    updateDatabaseClickHints(viewMode);
+    
+    if (viewMode === 'database') {
+        engineFilters.style.display = 'flex';
+        // Switch to database view mode
+        if (selectedDatabase) {
+            loadDatabaseSchema(selectedDatabase);
+        }
+    } else {
+        engineFilters.style.display = 'none';
+        // Switch back to table view mode
+        if (selectedDatabase && selectedTable) {
+            loadTableSchema(selectedDatabase, selectedTable);
+        }
+    }
+}
+
+// Update database click hints based on view mode
+function updateDatabaseClickHints(viewMode) {
+    const databases = document.querySelectorAll('.database');
+    databases.forEach(db => {
+        if (viewMode === 'database') {
+            db.title = 'Click to view database schema';
+            db.style.cursor = 'pointer';
+        } else {
+            db.title = 'Click to expand/collapse tables';
+            db.style.cursor = 'pointer';
+        }
+    });
+}
+
+// Apply engine filters for database view
+function applyEngineFilters() {
+    if (!selectedDatabase) {
+        showError('Please select a database first');
+        return;
+    }
+    
+    const selectedViewMode = document.querySelector('input[name="viewMode"]:checked').value;
+    if (selectedViewMode === 'database') {
+        loadDatabaseSchema(selectedDatabase);
+    }
+}
+
+// Load database-level schema with filters
+async function loadDatabaseSchema(database) {
+    try {
+        // Get selected engine filters
+        const engineCheckboxes = document.querySelectorAll('.engine-checkboxes input[type="checkbox"]:checked');
+        const selectedEngines = Array.from(engineCheckboxes).map(cb => cb.value);
+        
+        // Get metadata preference
+        const metadataToggle = document.getElementById('metadata-toggle');
+        const includeMetadata = metadataToggle ? metadataToggle.checked : true;
+        
+        // Build query parameters
+        const params = new URLSearchParams();
+        selectedEngines.forEach(engine => params.append('engines', engine));
+        params.append('metadata', includeMetadata.toString());
+        
+        const response = await fetch(`/api/database/${database}/schema?${params.toString()}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Update current selection display - just show database name
+        currentSelection.textContent = `Database: ${database}`;
+        
+        // Clear table details for database view
+        showNoTableSelected();
+        
+        // Set the current schema and render
+        currentSchema = data.schema;
+        await renderSchema();
+        
+    } catch (error) {
+        showError(`Failed to load database schema: ${error.message}`);
+    }
 }
