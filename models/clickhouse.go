@@ -1024,6 +1024,8 @@ func (c *ClickHouseClient) GenerateDatabaseMermaidSchema(dbName string, engineFi
 		c.getDatabaseRelationsBack(&sb, tablesRelations, relationTableName, &seenRelationships, processedTables)
 	}
 
+
+
 	// Add legend for engine types
 	if len(engineCounts) > 0 {
 		sb.WriteString("\n    %% Legend\n")
@@ -1040,7 +1042,13 @@ func (c *ClickHouseClient) GenerateDatabaseMermaidSchema(dbName string, engineFi
 		}
 	}
 
-	return sb.String(), nil
+	// Log the complete Mermaid diagram for external validation
+	mermaidSchema := sb.String()
+	fmt.Printf("\n=== COMPLETE MERMAID DIAGRAM FOR EXTERNAL VALIDATION ===\n")
+	fmt.Printf("%s\n", mermaidSchema)
+	fmt.Printf("=== END MERMAID DIAGRAM ===\n\n")
+
+	return mermaidSchema, nil
 }
 
 // getDatabaseRelationsNext recursively finds forward relationships for database view

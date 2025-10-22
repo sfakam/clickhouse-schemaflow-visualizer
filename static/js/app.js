@@ -17,14 +17,36 @@ let currentSchema = null;
 let currentZoomLevel = 1; // Default zoom level
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Mermaid once at startup
     mermaid.initialize({
         startOnLoad: false,
-        theme: 'Neo',
-        look: 'Neo',
+        theme: 'base',
+        themeVariables: {
+            primaryColor: '#ECECFF',
+            primaryTextColor: '#333333',
+            primaryBorderColor: '#9370DB',
+            lineColor: '#333333',
+            secondaryColor: '#ffffff',
+            tertiaryColor: '#ffffff',
+            background: '#ffffff',
+            fontFamily: 'trebuchet ms, verdana, arial, sans-serif',
+            fontSize: '12px'
+        },
         securityLevel: 'loose',
         flowchart: {
             useMaxWidth: true,
-            htmlLabels: true
+            htmlLabels: true,
+            padding: 15,
+            nodeSpacing: 50,
+            rankSpacing: 80,
+            curve: 'linear'
+        },
+        er: {
+            diagramPadding: 20,
+            layoutDirection: 'TB',
+            minEntityWidth: 150,
+            minEntityHeight: 100,
+            entityPadding: 20
         }
     });
 
@@ -394,39 +416,10 @@ function renderMermaidDiagram(schema) {
     schemaDiagram.appendChild(container);
 
     try {
-        mermaid.initialize({
-            startOnLoad: false,
-            theme: 'base',
-            themeVariables: {
-                primaryColor: '#ECECFF',
-                primaryTextColor: '#333333',
-                primaryBorderColor: '#9370DB',
-                lineColor: '#333333',
-                secondaryColor: '#ffffff',
-                tertiaryColor: '#ffffff',
-                background: '#ffffff',
-                fontFamily: 'trebuchet ms, verdana, arial, sans-serif',
-                fontSize: '12px'
-            },
-            securityLevel: 'loose',
-            flowchart: {
-                useMaxWidth: true,
-                htmlLabels: true,
-                padding: 15,
-                nodeSpacing: 50,
-                rankSpacing: 80,
-                curve: 'linear'
-            },
-            er: {
-                diagramPadding: 20,
-                layoutDirection: 'TB',
-                minEntityWidth: 150,
-                minEntityHeight: 100,
-                entityPadding: 20
-            }
+        // Use the modern mermaid.run() method instead of deprecated mermaid.init()
+        mermaid.run({
+            querySelector: '.mermaid'
         });
-
-        mermaid.init(undefined, '.mermaid');
         
         // Check if the SVG was properly rendered
         setTimeout(() => {
@@ -667,7 +660,7 @@ ${exportSchema}
                             });
 
                             try {
-                                mermaid.init(undefined, '.mermaid');
+                                mermaid.run({ querySelector: '.mermaid' });
                                 console.log("Mermaid initialization successful");
                             } catch (renderError) {
                                 console.error("Mermaid render error:", renderError);
@@ -705,7 +698,7 @@ ${exportSchema}
                                     });
 
                                     try {
-                                        mermaid.init(undefined, '.mermaid');
+                                        mermaid.run({ querySelector: '.mermaid' });
                                         console.log("Mermaid initialization successful after waiting");
                                         rawSchema.style.display = 'none';
                                     } catch (renderError) {
