@@ -872,11 +872,17 @@ func (c *ClickHouseClient) GenerateDatabaseMermaidSchema(dbName string, engineFi
 		"MergeTree":                "#1f77b4", // Blue
 		"ReplicatedMergeTree":      "#ff7f0e", // Orange  
 		"SummingMergeTree":         "#2ca02c", // Green
+		"ReplicatedSummingMergeTree": "#2ca02c", // Green (same as SummingMergeTree)
 		"ReplacingMergeTree":       "#d62728", // Red
+		"ReplicatedReplacingMergeTree": "#d62728", // Red (same as ReplacingMergeTree)
 		"AggregatingMergeTree":     "#9467bd", // Purple
+		"ReplicatedAggregatingMergeTree": "#9467bd", // Purple (same as AggregatingMergeTree)
 		"CollapsingMergeTree":      "#8c564b", // Brown
+		"ReplicatedCollapsingMergeTree": "#8c564b", // Brown (same as CollapsingMergeTree)
 		"VersionedCollapsingMergeTree": "#e377c2", // Pink
+		"ReplicatedVersionedCollapsingMergeTree": "#e377c2", // Pink (same as VersionedCollapsingMergeTree)
 		"GraphiteMergeTree":        "#7f7f7f", // Gray
+		"ReplicatedGraphiteMergeTree": "#7f7f7f", // Gray (same as GraphiteMergeTree)
 		"MaterializedView":         "#bcbd22", // Olive
 		"View":                     "#17becf", // Cyan
 		"Dictionary":               "#ffbb78", // Light Orange
@@ -891,11 +897,17 @@ func (c *ClickHouseClient) GenerateDatabaseMermaidSchema(dbName string, engineFi
 		"MergeTree":                "fa-solid fa-database",
 		"ReplicatedMergeTree":      "fa-solid fa-copy",
 		"SummingMergeTree":         "fa-solid fa-calculator",
+		"ReplicatedSummingMergeTree": "fa-solid fa-calculator",
 		"ReplacingMergeTree":       "fa-solid fa-sync-alt",
+		"ReplicatedReplacingMergeTree": "fa-solid fa-sync-alt",
 		"AggregatingMergeTree":     "fa-solid fa-chart-bar",
+		"ReplicatedAggregatingMergeTree": "fa-solid fa-chart-bar",
 		"CollapsingMergeTree":      "fa-solid fa-compress",
+		"ReplicatedCollapsingMergeTree": "fa-solid fa-compress",
 		"VersionedCollapsingMergeTree": "fa-solid fa-code-branch",
+		"ReplicatedVersionedCollapsingMergeTree": "fa-solid fa-code-branch",
 		"GraphiteMergeTree":        "fa-solid fa-chart-line",
+		"ReplicatedGraphiteMergeTree": "fa-solid fa-chart-line",
 		"MaterializedView":         "fa-solid fa-eye",
 		"View":                     "fa-solid fa-search",
 		"Dictionary":               "fa-solid fa-book",
@@ -917,7 +929,8 @@ func (c *ClickHouseClient) GenerateDatabaseMermaidSchema(dbName string, engineFi
 	}
 
 	// Collect all unique table names from relations data for this database
-	allDatabaseTables := make(map[string]string) // Maps relation table name to clean table name
+	// Maps clean table name to preferred relation table name (prefer escaped format for consistency with relations)
+	uniqueTables := make(map[string]string)
 	
 	for _, relation := range tablesRelations {
 		// Check both Table and DependsOnTable fields
@@ -943,15 +956,23 @@ func (c *ClickHouseClient) GenerateDatabaseMermaidSchema(dbName string, engineFi
 					
 					// Only include if the clean table exists in system.tables
 					if _, exists := tablesMap[cleanTableName]; exists {
-						allDatabaseTables[relationTableName] = cleanTableName
+						// Prefer escaped format for consistency with relations data
+						if existingRelationName, exists := uniqueTables[cleanTableName]; !exists {
+							uniqueTables[cleanTableName] = relationTableName
+						} else {
+							// If escaped format is available, use it over clean format
+							if strings.Contains(relationTableName, "\\.") && !strings.Contains(existingRelationName, "\\.") {
+								uniqueTables[cleanTableName] = relationTableName
+							}
+						}
 					}
 				}
 			}
 		}
 	}
 
-	// Process each table from relations data that also exists in system.tables  
-	for relationTableName, cleanTableName := range allDatabaseTables {
+	// Process each unique table from relations data that also exists in system.tables  
+	for cleanTableName, relationTableName := range uniqueTables {
 		// Get engine type from the database query
 		engineType, exists := tableEngines[cleanTableName]
 		if !exists {
@@ -973,19 +994,11 @@ func (c *ClickHouseClient) GenerateDatabaseMermaidSchema(dbName string, engineFi
 			nodeContent = cleanTableName
 		}
 
-		// Format table name for better display (add line breaks for long names)
+		// Use the full table name without line breaks - let CSS handle the box sizing
 		displayName := cleanTableName
-		if len(cleanTableName) > 25 {
-			// Add line breaks every 25 characters at underscores or other separators
-			displayName = c.formatLongTableName(cleanTableName)
-		}
 
-		// Add engine icon
-		if icon, exists := engineIcons[engineType]; exists {
-			nodeContent = fmt.Sprintf("<i class=\"%s\"></i> %s<br><small>%s</small>", icon, displayName, engineType)
-		} else {
-			nodeContent = fmt.Sprintf("%s<br><small>%s</small>", displayName, engineType)
-		}
+		// Simplified node content for better Mermaid rendering
+		nodeContent = fmt.Sprintf("%s (%s)", displayName, engineType)
 
 		// Create node using the relation table name for consistent hashing
 		nodeId := city.Hash32([]byte(relationTableName))

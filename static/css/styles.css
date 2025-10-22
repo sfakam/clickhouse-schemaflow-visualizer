@@ -638,7 +638,7 @@ small {
 
 /* Mermaid diagram node sizing - larger boxes for long content */
 .mermaid .node rect {
-    min-width: 200px !important;
+    min-width: 300px !important;
     min-height: 60px !important;
     rx: 5px !important;
     ry: 5px !important;
@@ -661,7 +661,7 @@ small {
 
 /* Foreign object for HTML content */
 .mermaid .node foreignObject {
-    width: 200px !important;
+    width: 300px !important;
     height: 60px !important;
     color: #333 !important;
 }
