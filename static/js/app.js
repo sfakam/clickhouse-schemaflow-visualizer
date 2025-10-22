@@ -30,23 +30,24 @@ document.addEventListener('DOMContentLoaded', () => {
             tertiaryColor: '#ffffff',
             background: '#ffffff',
             fontFamily: 'trebuchet ms, verdana, arial, sans-serif',
-            fontSize: '12px'
+            fontSize: '14px'
         },
         securityLevel: 'loose',
         flowchart: {
             useMaxWidth: true,
             htmlLabels: true,
-            padding: 15,
-            nodeSpacing: 50,
-            rankSpacing: 80,
-            curve: 'linear'
+            padding: 20,
+            nodeSpacing: 100,
+            rankSpacing: 100,
+            curve: 'linear',
+            wrappingWidth: 400
         },
         er: {
             diagramPadding: 20,
             layoutDirection: 'TB',
-            minEntityWidth: 150,
-            minEntityHeight: 100,
-            entityPadding: 20
+            minEntityWidth: 200,
+            minEntityHeight: 80,
+            entityPadding: 25
         }
     });
 
@@ -629,18 +630,7 @@ ${exportSchema}
                         schemaContainer.scrollTop = scrollTop - moveY;
                     });
 
-                    // Mouse wheel zoom
-                    schemaContainer.addEventListener('wheel', (event) => {
-                        event.preventDefault();
-                        const delta = event.deltaY || event.detail || event.wheelDelta;
-                        if (delta < 0) {
-                            zoomIn();
-                        } else {
-                            zoomOut();
-                        }
-                    }, { passive: false });
-
-                    // Button event listeners
+                    // Button event listeners for zoom controls
                     zoomInBtn.addEventListener('click', zoomIn);
                     zoomOutBtn.addEventListener('click', zoomOut);
                     resetZoomBtn.addEventListener('click', resetZoom);
@@ -777,8 +767,37 @@ function setupMouseWheelZoom() {
     const schemaContainer = document.querySelector('.schema-container');
     if (!schemaContainer) return;
     
-    schemaContainer.removeEventListener('wheel', handleMouseWheel);
-    schemaContainer.addEventListener('wheel', handleMouseWheel, { passive: false });
+    // Add wheel event listener for Ctrl+Scroll zoom on the schema container
+    const handleWheel = (event) => {
+        // Check if mouse is over schema container
+        const rect = schemaContainer.getBoundingClientRect();
+        const isOverContainer = (
+            event.clientX >= rect.left &&
+            event.clientX <= rect.right &&
+            event.clientY >= rect.top &&
+            event.clientY <= rect.bottom
+        );
+        
+        if (!isOverContainer) return;
+        
+        // Only zoom when Ctrl key is pressed (or Meta key on Mac)
+        if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const delta = event.deltaY;
+            if (delta < 0) {
+                zoomIn();
+            } else {
+                zoomOut();
+            }
+            console.log(`Ctrl+Scroll zoom - level: ${currentZoomLevel.toFixed(1)}`);
+        }
+        // Otherwise, allow natural scrolling (no preventDefault)
+    };
+    
+    // Attach to document to ensure we catch the event
+    document.addEventListener('wheel', handleWheel, { passive: false });
     
     // Setup mouse drag scrolling
     let isDragging = false;
@@ -819,21 +838,7 @@ function setupMouseWheelZoom() {
         schemaContainer.scrollTop = scrollTop - moveY;
     });
     
-    console.log("Mouse wheel zoom and drag support set up");
-}
-
-function handleMouseWheel(event) {
-    event.preventDefault();
-    
-    const delta = event.deltaY || event.detail || event.wheelDelta;
-    
-    if (delta < 0) {
-        zoomIn();
-    } else {
-        zoomOut();
-    }
-    
-    console.log(`Zoom level: ${currentZoomLevel.toFixed(1)}`);
+    console.log("Mouse drag scrolling and Ctrl+Scroll zoom support set up");
 }
 
 function toggleMetadataVisibility() {
