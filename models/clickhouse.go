@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -62,12 +63,13 @@ type ColumnInfo struct {
 }
 
 type TableDetails struct {
-	Name       string       `json:"name"`
-	Database   string       `json:"database"`
-	Engine     string       `json:"engine"`
-	TotalRows  *uint64      `json:"total_rows"`
-	TotalBytes *uint64      `json:"total_bytes"`
-	Columns    []ColumnInfo `json:"columns"`
+	Name        string       `json:"name"`
+	Database    string       `json:"database"`
+	Engine      string       `json:"engine"`
+	TotalRows   *uint64      `json:"total_rows"`
+	TotalBytes  *uint64      `json:"total_bytes"`
+	Columns     []ColumnInfo `json:"columns"`
+	CreateQuery string       `json:"create_query"`
 }
 
 // ClickHouseDBClient interface defines the database operations
@@ -1236,18 +1238,18 @@ func (c *ClickHouseClient) getRelationshipType(relation TableRelation) string {
 func (c *ClickHouseClient) GetTableColumns(database, table string) (*TableDetails, error) {
 	ctx := context.Background()
 
-	// First get basic table info
+	// First get basic table info including create query
 	tableQuery := `
-		SELECT engine, total_rows, total_bytes 
+		SELECT engine, total_rows, total_bytes, create_table_query 
 		FROM system.tables 
 		WHERE database = ? AND name = ?
 	`
 
-	var engine string
+	var engine, createQuery string
 	var totalRows, totalBytes *uint64
 
 	row := c.conn.QueryRow(ctx, tableQuery, database, table)
-	if err := row.Scan(&engine, &totalRows, &totalBytes); err != nil {
+	if err := row.Scan(&engine, &totalRows, &totalBytes, &createQuery); err != nil {
 		return nil, fmt.Errorf("failed to get table info: %v", err)
 	}
 
@@ -1279,13 +1281,77 @@ func (c *ClickHouseClient) GetTableColumns(database, table string) (*TableDetail
 	}
 
 	return &TableDetails{
-		Name:       table,
-		Database:   database,
-		Engine:     engine,
-		TotalRows:  totalRows,
-		TotalBytes: totalBytes,
-		Columns:    columns,
+		Name:        table,
+		Database:    database,
+		Engine:      engine,
+		TotalRows:   totalRows,
+		TotalBytes:  totalBytes,
+		Columns:     columns,
+		CreateQuery: c.formatCreateQuery(createQuery),
 	}, nil
+}
+
+// formatCreateQuery formats a CREATE TABLE query for better readability
+func (c *ClickHouseClient) formatCreateQuery(query string) string {
+	if query == "" {
+		return ""
+	}
+
+	// Basic formatting - add line breaks at key SQL keywords
+	formatted := query
+	
+	// Add line breaks after key keywords
+	keywords := []string{
+		"CREATE TABLE", "CREATE MATERIALIZED VIEW", "CREATE VIEW", "CREATE DICTIONARY",
+		") ENGINE =", ") AS SELECT", "ORDER BY", "PARTITION BY", "SAMPLE BY", 
+		"SETTINGS", "TTL", "PRIMARY KEY", "REFRESH EVERY",
+	}
+	
+	for _, keyword := range keywords {
+		formatted = strings.ReplaceAll(formatted, keyword, "\n"+keyword)
+	}
+	
+	// Add line breaks after column definitions (look for comma followed by backtick)
+	formatted = regexp.MustCompile(`,(\s*\x60)`).ReplaceAllString(formatted, ",\n    $1")
+	
+	// Add proper indentation for column definitions
+	lines := strings.Split(formatted, "\n")
+	var result []string
+	inColumnDefinition := false
+	
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		
+		// Detect if we're in column definition section
+		if strings.Contains(trimmed, "CREATE") && (strings.Contains(trimmed, "TABLE") || strings.Contains(trimmed, "VIEW")) {
+			result = append(result, trimmed)
+			inColumnDefinition = false
+		} else if trimmed == "(" || (inColumnDefinition && strings.HasPrefix(trimmed, "(")) {
+			result = append(result, trimmed)
+			inColumnDefinition = true
+		} else if strings.HasPrefix(trimmed, ") ENGINE") || strings.HasPrefix(trimmed, ") AS") {
+			result = append(result, trimmed)
+			inColumnDefinition = false
+		} else if inColumnDefinition && (strings.HasPrefix(trimmed, "`") || strings.Contains(trimmed, "`")) {
+			// Column definition - add indentation
+			result = append(result, "    "+trimmed)
+		} else if strings.HasPrefix(trimmed, "ORDER BY") || strings.HasPrefix(trimmed, "PARTITION BY") || 
+				 strings.HasPrefix(trimmed, "SETTINGS") || strings.HasPrefix(trimmed, "TTL") ||
+				 strings.HasPrefix(trimmed, "PRIMARY KEY") || strings.HasPrefix(trimmed, "REFRESH EVERY") {
+			result = append(result, trimmed)
+		} else if trimmed != "" {
+			// Check if previous line needs continuation
+			if i > 0 && (strings.HasSuffix(strings.TrimSpace(lines[i-1]), ",") || 
+						strings.Contains(trimmed, "SELECT") || strings.Contains(trimmed, "FROM") ||
+						strings.Contains(trimmed, "WHERE") || strings.Contains(trimmed, "GROUP BY")) {
+				result = append(result, "    "+trimmed)
+			} else {
+				result = append(result, trimmed)
+			}
+		}
+	}
+	
+	return strings.Join(result, "\n")
 }
 
 // Close closes the ClickHouse connection

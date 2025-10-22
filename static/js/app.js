@@ -934,6 +934,18 @@ function renderTableDetails(details) {
                 </tbody>
             </table>
         </div>
+        
+        ${details.create_query ? `
+        <div class="create-query-section">
+            <h4><i class="fa-solid fa-code"></i> CREATE Statement</h4>
+            <div class="create-query-container">
+                <button class="copy-btn" onclick="copyCreateQuery(this)" title="Copy to clipboard">
+                    <i class="fa-solid fa-copy"></i>
+                </button>
+                <pre class="create-query-content"><code>${details.create_query}</code></pre>
+            </div>
+        </div>
+        ` : ''}
     `;
 
     tableDetailsContent.innerHTML = html;
@@ -946,6 +958,44 @@ function showTableDetailsError(message) {
             <p>${message}</p>
         </div>
     `;
+}
+
+function copyCreateQuery(button) {
+    const codeElement = button.parentElement.querySelector('code');
+    const createQuery = codeElement.textContent;
+    
+    navigator.clipboard.writeText(createQuery).then(() => {
+        // Visual feedback
+        const icon = button.querySelector('i');
+        const originalClass = icon.className;
+        icon.className = 'fa-solid fa-check';
+        button.style.color = '#28a745';
+        
+        setTimeout(() => {
+            icon.className = originalClass;
+            button.style.color = '';
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy text: ', err);
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = createQuery;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        // Visual feedback
+        const icon = button.querySelector('i');
+        const originalClass = icon.className;
+        icon.className = 'fa-solid fa-check';
+        button.style.color = '#28a745';
+        
+        setTimeout(() => {
+            icon.className = originalClass;
+            button.style.color = '';
+        }, 2000);
+    });
 }
 
 function showNoTableSelected() {
