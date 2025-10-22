@@ -392,6 +392,14 @@ main {
     user-select: none;
     cursor: grab;
     border-right: 1px solid #ddd;
+    text-align: center;
+}
+
+#schema-diagram {
+    display: inline-block;
+    text-align: left;
+    transform-origin: center center;
+    transition: transform 0.2s ease;
 }
 
 /* Table details section */

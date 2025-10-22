@@ -1633,3 +1633,181 @@ func (c *ClickHouseClient) formatCreateQuery(query string) string {
 func (c *ClickHouseClient) Close() error {
 	return c.conn.Close()
 }
+
+// ========== NEW CLEAN JSON API METHODS ==========
+
+// DatabaseInfo represents clean database information
+type DatabaseInfo struct {
+	Name   string      `json:"name"`
+	Tables []TableMeta `json:"tables"`
+}
+
+// TableMeta represents clean table metadata
+type TableMeta struct {
+	Name string  `json:"name"`
+	Type string  `json:"type"`
+	Rows *uint64 `json:"rows,omitempty"`
+	Size string  `json:"size,omitempty"`
+}
+
+// ColumnMeta represents clean column metadata
+type ColumnMeta struct {
+	Name              string `json:"name"`
+	Type              string `json:"type"`
+	DefaultKind       string `json:"default_kind,omitempty"`
+	DefaultExpression string `json:"default_expression,omitempty"`
+	Comment           string `json:"comment,omitempty"`
+	CodecExpression   string `json:"codec_expression,omitempty"`
+	TTLExpression     string `json:"ttl_expression,omitempty"`
+}
+
+// RelationshipInfo represents table relationships
+type RelationshipInfo struct {
+	SourceTable      string `json:"source_table"`
+	SourceDatabase   string `json:"source_database"`
+	TargetTable      string `json:"target_table"`
+	TargetDatabase   string `json:"target_database"`
+	RelationshipType string `json:"relationship_type"`
+}
+
+// GetDatabasesClean returns databases and tables in clean JSON format (API.md spec)
+func (c *ClickHouseClient) GetDatabasesClean() (map[string][]TableMeta, error) {
+	if err := c.refreshTableCache(); err != nil {
+		return nil, fmt.Errorf("failed to refresh table cache: %v", err)
+	}
+
+	c.cache.mutex.RLock()
+	defer c.cache.mutex.RUnlock()
+
+	result := make(map[string][]TableMeta)
+	
+	for dbName, tables := range c.cache.DatabasesMap {
+		var tableMetas []TableMeta
+		
+		for tableName := range tables {
+			key := fmt.Sprintf("%s.%s", dbName, tableName)
+			if cachedTable, exists := c.cache.Tables[key]; exists {
+				size := ""
+				if cachedTable.TotalBytes != nil {
+					size = formatBytes(cachedTable.TotalBytes)
+				}
+				
+				tableMetas = append(tableMetas, TableMeta{
+					Name: cachedTable.Name,
+					Type: cachedTable.Engine,
+					Rows: cachedTable.TotalRows,
+					Size: size,
+				})
+			}
+		}
+		
+		result[dbName] = tableMetas
+	}
+	
+	return result, nil
+}
+
+// GetTableColumnsClean returns table columns in clean JSON format (API.md spec)
+func (c *ClickHouseClient) GetTableColumnsClean(database, table string) ([]ColumnMeta, error) {
+	ctx := context.Background()
+	
+	query := `
+		SELECT 
+			name,
+			type,
+			default_kind,
+			default_expression,
+			comment
+		FROM system.columns
+		WHERE database = ? AND table = ?
+		ORDER BY position
+	`
+
+	rows, err := c.conn.Query(ctx, query, database, table)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query columns: %v", err)
+	}
+	defer rows.Close()
+
+	var columns []ColumnMeta
+	for rows.Next() {
+		var col ColumnMeta
+		if err := rows.Scan(
+			&col.Name,
+			&col.Type,
+			&col.DefaultKind,
+			&col.DefaultExpression,
+			&col.Comment,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan column: %v", err)
+		}
+		columns = append(columns, col)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating columns: %v", err)
+	}
+
+	return columns, nil
+}
+
+// GetTableRelationshipsClean returns table relationships in clean JSON format
+func (c *ClickHouseClient) GetTableRelationshipsClean(database, table string) ([]RelationshipInfo, error) {
+	if err := c.refreshTableCache(); err != nil {
+		return nil, fmt.Errorf("failed to refresh table cache: %v", err)
+	}
+
+	c.cache.mutex.RLock()
+	defer c.cache.mutex.RUnlock()
+
+	var relationships []RelationshipInfo
+	fullTableName := fmt.Sprintf("%s.%s", database, table)
+
+	// Find relationships where this table is involved
+	for _, rel := range c.cache.Relations {
+		// Determine relationship type and direction
+		relType := "depends_on"
+		
+		// Check if this table depends on another
+		if rel.Table == fullTableName {
+			// Parse the target table
+			targetParts := strings.Split(rel.DependsOnTable, ".")
+			targetDB := database
+			targetTable := rel.DependsOnTable
+			if len(targetParts) == 2 {
+				targetDB = targetParts[0]
+				targetTable = targetParts[1]
+			}
+			
+			relationships = append(relationships, RelationshipInfo{
+				SourceTable:      table,
+				SourceDatabase:   database,
+				TargetTable:      targetTable,
+				TargetDatabase:   targetDB,
+				RelationshipType: relType,
+			})
+		}
+		
+		// Check if another table depends on this one
+		if rel.DependsOnTable == fullTableName {
+			// Parse the source table
+			sourceParts := strings.Split(rel.Table, ".")
+			sourceDB := database
+			sourceTable := rel.Table
+			if len(sourceParts) == 2 {
+				sourceDB = sourceParts[0]
+				sourceTable = sourceParts[1]
+			}
+			
+			relationships = append(relationships, RelationshipInfo{
+				SourceTable:      sourceTable,
+				SourceDatabase:   sourceDB,
+				TargetTable:      table,
+				TargetDatabase:   database,
+				RelationshipType: "depended_on_by",
+			})
+		}
+	}
+
+	return relationships, nil
+}

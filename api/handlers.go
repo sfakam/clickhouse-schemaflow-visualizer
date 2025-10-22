@@ -21,13 +21,21 @@ func NewHandler(clickhouse *models.ClickHouseClient) *Handler {
 
 // RegisterRoutes registers all API routes
 func (h *Handler) RegisterRoutes(router *gin.Engine) {
+	// New clean JSON API endpoints (matching API.md specification)
 	api := router.Group("/api")
 	{
-		api.GET("/databases", h.GetDatabases)
-		api.GET("/schema/:database/:table", h.GetTableSchema)
-		api.GET("/database/:database/schema", h.GetDatabaseSchema)
-		api.GET("/database/:database/stats", h.GetDatabaseStats)
-		api.GET("/table/:database/:table", h.GetTableDetails)
+		api.GET("/databases", h.GetDatabasesClean)
+		api.GET("/table/:database/:table", h.GetTableDetailsClean)
+		api.GET("/table/:database/:table/relationships", h.GetTableRelationships)
+	}
+	
+	// Mermaid/visualization endpoints (existing functionality)
+	mermaid := router.Group("/api/mermaid")
+	{
+		mermaid.GET("/databases", h.GetDatabases)
+		mermaid.GET("/schema/:database/:table", h.GetTableSchema)
+		mermaid.GET("/database/:database/schema", h.GetDatabaseSchema)
+		mermaid.GET("/database/:database/stats", h.GetDatabaseStats)
 	}
 }
 
@@ -131,4 +139,55 @@ func (h *Handler) GetDatabaseStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, stats)
+}
+
+// ========== NEW CLEAN JSON API HANDLERS (API.md spec) ==========
+
+// GetDatabasesClean returns databases and tables in clean JSON format
+func (h *Handler) GetDatabasesClean(c *gin.Context) {
+	databases, err := h.clickhouse.GetDatabasesClean()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, databases)
+}
+
+// GetTableDetailsClean returns table columns in clean JSON format
+func (h *Handler) GetTableDetailsClean(c *gin.Context) {
+	database := c.Param("database")
+	table := c.Param("table")
+
+	if database == "" || table == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "database and table parameters are required"})
+		return
+	}
+
+	columns, err := h.clickhouse.GetTableColumnsClean(database, table)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, columns)
+}
+
+// GetTableRelationships returns table relationships in clean JSON format
+func (h *Handler) GetTableRelationships(c *gin.Context) {
+	database := c.Param("database")
+	table := c.Param("table")
+
+	if database == "" || table == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "database and table parameters are required"})
+		return
+	}
+
+	relationships, err := h.clickhouse.GetTableRelationshipsClean(database, table)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, relationships)
 }
