@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -70,6 +71,30 @@ type TableDetails struct {
 	TotalBytes  *uint64      `json:"total_bytes"`
 	Columns     []ColumnInfo `json:"columns"`
 	CreateQuery string       `json:"create_query"`
+}
+
+// CachedTableData represents comprehensive table information from a single query
+type CachedTableData struct {
+	Name                        string
+	Database                    string
+	Engine                      string
+	EngineFullMeta             string
+	CreateQuery                string
+	TotalRows                  *uint64
+	TotalBytes                 *uint64
+	LoadingDependenciesDatabase []string
+	LoadingDependenciesTable   []string
+	Icon                       string
+	LastUpdated                time.Time
+}
+
+// TableCache manages all table data with a single source of truth
+type TableCache struct {
+	Tables          map[string]*CachedTableData // key: database.table
+	Relations       []TableRelation
+	DatabasesMap    map[string]map[string]string
+	LastRefresh     time.Time
+	mutex           sync.RWMutex
 }
 
 // ClickHouseDBClient interface defines the database operations
@@ -410,7 +435,8 @@ func (h *HTTPClient) executeQuery(ctx context.Context, query string) (*http.Resp
 
 // ClickHouseClient represents a client for interacting with ClickHouse
 type ClickHouseClient struct {
-	conn ClickHouseDBClient
+	conn  ClickHouseDBClient
+	cache *TableCache
 }
 
 // NewClickHouseClient creates a new ClickHouse client
@@ -433,7 +459,14 @@ func NewClickHouseClient(config Config) (*ClickHouseClient, error) {
 		return nil, fmt.Errorf("failed to ping ClickHouse: %v", err)
 	}
 
-	return &ClickHouseClient{conn: client}, nil
+	return &ClickHouseClient{
+		conn: client,
+		cache: &TableCache{
+			Tables:       make(map[string]*CachedTableData),
+			Relations:    make([]TableRelation, 0),
+			DatabasesMap: make(map[string]map[string]string),
+		},
+	}, nil
 }
 
 // createNativeClient creates a native TCP-based ClickHouse client
@@ -604,6 +637,200 @@ func generateTableListContent(icon, tableName string, totalRows *uint64, totalBy
 	)
 }
 
+// refreshTableCache performs a single comprehensive query to populate all table data
+func (c *ClickHouseClient) refreshTableCache() error {
+	c.cache.mutex.Lock()
+	defer c.cache.mutex.Unlock()
+
+	// Check if cache is still fresh (refresh every 5 minutes)
+	if time.Since(c.cache.LastRefresh) < 5*time.Minute && len(c.cache.Tables) > 0 {
+		return nil
+	}
+
+	log.Println("Refreshing table cache with comprehensive query")
+	ctx := context.Background()
+	
+	// Single query to get ALL table information
+	query := `
+		SELECT 
+			database, 
+			name, 
+			engine, 
+			engine_full, 
+			create_table_query, 
+			total_rows, 
+			total_bytes, 
+			loading_dependencies_database, 
+			loading_dependencies_table
+		FROM system.tables 
+		WHERE database NOT IN ('system', 'information_schema', 'performance_schema', 'mysql')
+		ORDER BY database, name
+	`
+
+	rows, err := c.conn.Query(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to query system.tables: %v", err)
+	}
+	defer rows.Close()
+
+	// Clear existing cache
+	c.cache.Tables = make(map[string]*CachedTableData)
+	c.cache.Relations = make([]TableRelation, 0)
+	c.cache.DatabasesMap = make(map[string]map[string]string)
+
+	for rows.Next() {
+		var database, name, engine, engineFull, createQuery string
+		var totalRows, totalBytes *uint64
+		var loadingDepsDB, loadingDepsTable []string
+
+		if err := rows.Scan(&database, &name, &engine, &engineFull, &createQuery, 
+			&totalRows, &totalBytes, &loadingDepsDB, &loadingDepsTable); err != nil {
+			return fmt.Errorf("failed to scan table data: %v", err)
+		}
+
+		// Skip unwanted databases
+		if !allowedDatabase(database) {
+			continue
+		}
+
+		fullTableName := database + "." + name
+		icon := c.getEngineIcon(engine)
+
+		// Store in cache
+		c.cache.Tables[fullTableName] = &CachedTableData{
+			Name:                        name,
+			Database:                    database,
+			Engine:                      engine,
+			EngineFullMeta:             engineFull,
+			CreateQuery:                createQuery,
+			TotalRows:                  totalRows,
+			TotalBytes:                 totalBytes,
+			LoadingDependenciesDatabase: loadingDepsDB,
+			LoadingDependenciesTable:   loadingDepsTable,
+			Icon:                       icon,
+			LastUpdated:                time.Now(),
+		}
+
+		// Build databases map for UI
+		if c.cache.DatabasesMap[database] == nil {
+			c.cache.DatabasesMap[database] = make(map[string]string)
+		}
+		c.cache.DatabasesMap[database][name] = generateTableListContent(icon, name, totalRows, totalBytes)
+
+		// Generate relations from the create query
+		relations := c.extractRelationsFromQuery(database, name, engine, engineFull, createQuery, loadingDepsDB, loadingDepsTable)
+		c.cache.Relations = append(c.cache.Relations, relations...)
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating table rows: %v", err)
+	}
+
+	c.cache.LastRefresh = time.Now()
+	log.Printf("Cache refreshed with %d tables from %d databases", len(c.cache.Tables), len(c.cache.DatabasesMap))
+	return nil
+}
+
+// getEngineIcon returns the appropriate icon for a table engine
+func (c *ClickHouseClient) getEngineIcon(engine string) string {
+	switch {
+	case engine == "MergeTree":
+		return `<i class="fa-solid fa-database"></i>`
+	case strings.HasPrefix(engine, "Replicated"):
+		return `<i class="fa-solid fa-circle-nodes"></i>`
+	case strings.HasPrefix(engine, "Dictionary"):
+		return `<i class="fa-solid fa-book"></i>`
+	case engine == "Distributed":
+		return `<i class="fa-solid fa-diagram-project"></i>`
+	case engine == "MaterializedView":
+		return `<i class="fa-solid fa-eye"></i>`
+	default:
+		return `<i class="fa-solid fa-table"></i>`
+	}
+}
+
+// extractRelationsFromQuery extracts table relationships from create queries
+func (c *ClickHouseClient) extractRelationsFromQuery(database, table, engine, engineFull, createQuery string, loadingDepsDB, loadingDepsTable []string) []TableRelation {
+	var relations []TableRelation
+	fullTableName := database + "." + table
+	icon := c.getEngineIcon(engine)
+
+	switch engine {
+	case "MergeTree":
+		relations = append(relations, TableRelation{Table: fullTableName, Icon: icon})
+
+	case "Distributed":
+		// Extract target table from engine_full
+		if parts := strings.Split(engineFull, "'"); len(parts) >= 6 {
+			targetDB := parts[3]
+			targetTable := parts[5]
+			targetFullName := targetDB + "." + targetTable
+			relations = append(relations, TableRelation{
+				DependsOnTable: fullTableName,
+				Table:          targetFullName,
+				Icon:           icon,
+			})
+		} else {
+			relations = append(relations, TableRelation{Table: fullTableName, Icon: icon})
+		}
+
+	case "MaterializedView":
+		// Extract source and target from CREATE query
+		queryParts1 := strings.Split(createQuery, " ")
+		queryParts2 := strings.Split(createQuery, "FROM ")
+		if len(queryParts1) > 5 && len(queryParts2) > 1 {
+			mvTable := queryParts1[3]
+			targetTable := queryParts1[5]
+			queryParts3 := strings.Split(queryParts2[1], " ")
+			sourceTable := queryParts3[0]
+
+			relations = append(relations, TableRelation{
+				DependsOnTable: sourceTable,
+				Table:          mvTable,
+				Icon:           icon,
+			})
+			relations = append(relations, TableRelation{
+				DependsOnTable: mvTable,
+				Table:          targetTable,
+				Icon:           icon,
+			})
+		}
+
+	default:
+		// Handle dictionary dependencies
+		if len(loadingDepsDB) > 0 && len(loadingDepsTable) > 0 {
+			depTable := loadingDepsDB[0] + "." + loadingDepsTable[0]
+			relations = append(relations, TableRelation{
+				DependsOnTable: depTable,
+				Table:          fullTableName,
+				Icon:           icon,
+			})
+		} else {
+			relations = append(relations, TableRelation{Table: fullTableName, Icon: icon})
+		}
+	}
+
+	return relations
+}
+
+// getTableFromCache retrieves table data from cache, refreshing if necessary
+func (c *ClickHouseClient) getTableFromCache(database, table string) (*CachedTableData, error) {
+	if err := c.refreshTableCache(); err != nil {
+		return nil, err
+	}
+
+	c.cache.mutex.RLock()
+	defer c.cache.mutex.RUnlock()
+
+	fullName := database + "." + table
+	tableData, exists := c.cache.Tables[fullName]
+	if !exists {
+		return nil, fmt.Errorf("table %s.%s not found", database, table)
+	}
+
+	return tableData, nil
+}
+
 func (c *ClickHouseClient) getTablesRelations() ([]TableRelation, error) {
 	if TableRelations != nil && DatabasesData != nil && TableMetadata != nil {
 		log.Println("Using cached tables relations")
@@ -754,29 +981,31 @@ func allowedDatabase(database string) bool {
 
 // GetDatabases returns a list of all databases
 func (c *ClickHouseClient) GetDatabases() (map[string]map[string]string, error) {
-	if DatabasesData == nil {
-		_, err := c.getTablesRelations()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get table relations: %v", err)
-		}
+	if err := c.refreshTableCache(); err != nil {
+		return nil, fmt.Errorf("failed to refresh table cache: %v", err)
 	}
 
-	return DatabasesData, nil
+	c.cache.mutex.RLock()
+	defer c.cache.mutex.RUnlock()
+
+	return c.cache.DatabasesMap, nil
 }
 
 // GenerateMermaidSchema generates a Mermaid schema for a table and its relationships
 func (c *ClickHouseClient) GenerateMermaidSchema(dbName, tableName string) (string, error) {
-	// Get the table schema
+	if err := c.refreshTableCache(); err != nil {
+		return "", fmt.Errorf("failed to refresh table cache: %v", err)
+	}
+
 	table := dbName + "." + tableName
 
 	// Start building the Mermaid schema
 	var sb strings.Builder
 	sb.WriteString("flowchart TB\n")
 
-	tablesRelations, err := c.getTablesRelations()
-	if err != nil {
-		return "", fmt.Errorf("failed to get table relations: %v", err)
-	}
+	c.cache.mutex.RLock()
+	relations := c.cache.Relations
+	c.cache.mutex.RUnlock()
 
 	// Generate node for the main table with additional info
 	nodeContent := c.generateTableNodeContent(table)
@@ -784,19 +1013,22 @@ func (c *ClickHouseClient) GenerateMermaidSchema(dbName, tableName string) (stri
 	sb.WriteString(fmt.Sprintf("    style %d fill:#FF6D00,stroke:#AA00FF,color:#FFFFFF\n\n", city.Hash32([]byte(table))))
 
 	seen := make(map[string]bool)
-	c.getRelationsNext(&sb, tablesRelations, table, &seen)
-	c.getRelationsBack(&sb, tablesRelations, table, &seen)
+	c.getRelationsNext(&sb, relations, table, &seen)
+	c.getRelationsBack(&sb, relations, table, &seen)
 
 	return sb.String(), nil
 }
 
 func (c *ClickHouseClient) generateTableNodeContent(table string) string {
-	if metadata, exists := TableMetadata[table]; exists && metadata.TotalRows != nil {
+	c.cache.mutex.RLock()
+	defer c.cache.mutex.RUnlock()
+	
+	if tableData, exists := c.cache.Tables[table]; exists && tableData.TotalRows != nil {
 		return fmt.Sprintf(
 			"%s<br><small>Rows: <b>%s</b> Size: <b>%s</b></small>",
 			table,
-			formatRows(metadata.TotalRows),
-			formatBytes(metadata.TotalBytes),
+			formatRows(tableData.TotalRows),
+			formatBytes(tableData.TotalBytes),
 		)
 	}
 	return table
@@ -1132,29 +1364,18 @@ func (c *ClickHouseClient) containsEngine(filters []string, engineType string) b
 
 // getTableEngines returns a map of table names to their engine types for a specific database
 func (c *ClickHouseClient) getTableEngines(dbName string) (map[string]string, error) {
-	query := `
-		SELECT name, engine 
-		FROM system.tables 
-		WHERE database = ?
-	`
-	
-	rows, err := c.conn.Query(context.Background(), query, dbName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query system.tables: %v", err)
+	if err := c.refreshTableCache(); err != nil {
+		return nil, fmt.Errorf("failed to refresh cache: %v", err)
 	}
-	defer rows.Close()
+
+	c.cache.mutex.RLock()
+	defer c.cache.mutex.RUnlock()
 
 	tableEngines := make(map[string]string)
-	for rows.Next() {
-		var tableName, engine string
-		if err := rows.Scan(&tableName, &engine); err != nil {
-			return nil, fmt.Errorf("failed to scan row: %v", err)
+	for _, tableData := range c.cache.Tables {
+		if tableData.Database == dbName {
+			tableEngines[tableData.Name] = tableData.Engine
 		}
-		tableEngines[tableName] = engine
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating rows: %v", err)
 	}
 
 	return tableEngines, nil
@@ -1236,24 +1457,14 @@ func (c *ClickHouseClient) getRelationshipType(relation TableRelation) string {
 
 // GetTableColumns returns detailed column information for a specific table
 func (c *ClickHouseClient) GetTableColumns(database, table string) (*TableDetails, error) {
-	ctx := context.Background()
-
-	// First get basic table info including create query
-	tableQuery := `
-		SELECT engine, total_rows, total_bytes, create_table_query 
-		FROM system.tables 
-		WHERE database = ? AND name = ?
-	`
-
-	var engine, createQuery string
-	var totalRows, totalBytes *uint64
-
-	row := c.conn.QueryRow(ctx, tableQuery, database, table)
-	if err := row.Scan(&engine, &totalRows, &totalBytes, &createQuery); err != nil {
-		return nil, fmt.Errorf("failed to get table info: %v", err)
+	// Get basic table info from cache (much faster than querying system.tables)
+	tableData, err := c.getTableFromCache(database, table)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get table from cache: %v", err)
 	}
 
-	// Get column information
+	// Only query columns separately (this is the minimal query needed)
+	ctx := context.Background()
 	columnsQuery := `
 		SELECT name, type, position, comment
 		FROM system.columns 
@@ -1281,13 +1492,13 @@ func (c *ClickHouseClient) GetTableColumns(database, table string) (*TableDetail
 	}
 
 	return &TableDetails{
-		Name:        table,
-		Database:    database,
-		Engine:      engine,
-		TotalRows:   totalRows,
-		TotalBytes:  totalBytes,
+		Name:        tableData.Name,
+		Database:    tableData.Database,
+		Engine:      tableData.Engine,
+		TotalRows:   tableData.TotalRows,
+		TotalBytes:  tableData.TotalBytes,
 		Columns:     columns,
-		CreateQuery: c.formatCreateQuery(createQuery),
+		CreateQuery: c.formatCreateQuery(tableData.CreateQuery),
 	}, nil
 }
 
