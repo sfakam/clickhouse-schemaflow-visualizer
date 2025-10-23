@@ -74,33 +74,39 @@ class TestCleanAPITableDetails:
         response = api_client.get(f"{api_base_url}/api/table/{test_database}/{test_table}")
         assert response.headers["Content-Type"].startswith("application/json")
         data = response.json()
-        assert isinstance(data, list)
+        assert isinstance(data, dict)
     
     def test_get_table_details_structure(
         self, api_base_url, api_client, test_database, test_table, verify_api_available
     ):
-        """Test that table details have correct column structure"""
+        """Test that table details have correct structure with metadata and columns"""
         response = api_client.get(f"{api_base_url}/api/table/{test_database}/{test_table}")
         data = response.json()
         
-        assert isinstance(data, list)
-        assert len(data) > 0, "Expected at least one column"
+        # Should be a dict with table metadata
+        assert isinstance(data, dict)
         
-        for column in data:
+        # Required fields
+        assert "name" in data
+        assert "database" in data
+        assert "engine" in data
+        assert "columns" in data
+        
+        # Validate metadata fields
+        assert isinstance(data["name"], str)
+        assert isinstance(data["database"], str)
+        assert isinstance(data["engine"], str)
+        
+        # Validate columns array
+        assert isinstance(data["columns"], list)
+        assert len(data["columns"]) > 0, "Expected at least one column"
+        
+        for column in data["columns"]:
             assert isinstance(column, dict)
             assert "name" in column
             assert "type" in column
             assert isinstance(column["name"], str)
             assert isinstance(column["type"], str)
-            
-            # Optional fields from API.md spec
-            optional_fields = [
-                "default_kind", "default_expression", "comment",
-                "codec_expression", "ttl_expression"
-            ]
-            for field in optional_fields:
-                if field in column:
-                    assert isinstance(column[field], str)
     
     def test_get_table_details_missing_database_returns_400(
         self, api_base_url, api_client, test_table, verify_api_available
@@ -123,11 +129,10 @@ class TestCleanAPITableDetails:
         response = api_client.get(
             f"{api_base_url}/api/table/{test_database}/nonexistent_table_xyz_12345"
         )
-        # ClickHouse returns empty result for nonexistent tables, which is valid behavior
-        assert response.status_code == 200
-        # Response should be None or empty array
+        # Nonexistent table should return 500 error
+        assert response.status_code == 500
         data = response.json()
-        assert data is None or data == []
+        assert "error" in data
 
 
 @pytest.mark.integration

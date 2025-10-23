@@ -41,7 +41,7 @@ def test_table():
 def verify_api_available(api_base_url, api_client):
     """Verify that the API is available before running tests"""
     try:
-        response = api_client.get(f"{api_base_url}/api/mermaid/databases", timeout=5)
+        response = api_client.get(f"{api_base_url}/api/render/databases", timeout=5)
         if response.status_code != 200:
             pytest.skip("API server is not available or not responding correctly")
     except requests.exceptions.RequestException:

@@ -995,6 +995,17 @@ func allowedDatabase(database string) bool {
 	}
 }
 
+// cleanTableName removes backslashes, quotes, and other escape characters from table names
+func cleanTableName(name string) string {
+	// Remove backslashes and quotes that may be in the table name
+	cleaned := strings.ReplaceAll(name, "\\", "")
+	cleaned = strings.ReplaceAll(cleaned, "'", "")
+	cleaned = strings.ReplaceAll(cleaned, "`", "")
+	cleaned = strings.ReplaceAll(cleaned, "\"", "")
+	cleaned = strings.Trim(cleaned, " ")
+	return cleaned
+}
+
 // GetDatabases returns a list of all databases
 func (c *ClickHouseClient) GetDatabases() (map[string]map[string]string, error) {
 	if err := c.refreshTableCache(); err != nil {
@@ -1100,42 +1111,50 @@ func (c *ClickHouseClient) generateTableNodeContent(table string) string {
 
 func (c *ClickHouseClient) getRelationsNext(sb *strings.Builder, tablesRelations []TableRelation, table string, seen *map[string]bool) {
 	for _, rel := range tablesRelations {
-		if rel.DependsOnTable == table && table != "" {
-			depContent := c.generateTableNodeContent(rel.DependsOnTable)
-			relContent := c.generateTableNodeContent(rel.Table)
+		// Clean the relation table names for comparison
+		cleanDepsOnTable := cleanTableName(rel.DependsOnTable)
+		cleanTable := cleanTableName(rel.Table)
+		
+		if cleanDepsOnTable == table && table != "" {
+			depContent := c.generateTableNodeContent(cleanDepsOnTable)
+			relContent := c.generateTableNodeContent(cleanTable)
 
 			mermaidRow := fmt.Sprintf(
 				"    %d[\"%s\"] --> %d[\"%s\"]\n",
-				city.Hash32([]byte(rel.DependsOnTable)), depContent,
-				city.Hash32([]byte(rel.Table)), relContent,
+				city.Hash32([]byte(cleanDepsOnTable)), depContent,
+				city.Hash32([]byte(cleanTable)), relContent,
 			)
 
 			if !(*seen)[mermaidRow] {
 				(*seen)[mermaidRow] = true
 				sb.WriteString(mermaidRow)
 			}
-			c.getRelationsNext(sb, tablesRelations, rel.Table, seen)
+			c.getRelationsNext(sb, tablesRelations, cleanTable, seen)
 		}
 	}
 }
 
 func (c *ClickHouseClient) getRelationsBack(sb *strings.Builder, tablesRelations []TableRelation, table string, seen *map[string]bool) {
 	for _, rel := range tablesRelations {
-		if rel.Table == table && rel.DependsOnTable != "" {
-			depContent := c.generateTableNodeContent(rel.DependsOnTable)
-			relContent := c.generateTableNodeContent(rel.Table)
+		// Clean the relation table names for comparison
+		cleanDepsOnTable := cleanTableName(rel.DependsOnTable)
+		cleanTable := cleanTableName(rel.Table)
+		
+		if cleanTable == table && cleanDepsOnTable != "" {
+			depContent := c.generateTableNodeContent(cleanDepsOnTable)
+			relContent := c.generateTableNodeContent(cleanTable)
 
 			mermaidRow := fmt.Sprintf(
 				"    %d[\"%s\"] --> %d[\"%s\"]\n",
-				city.Hash32([]byte(rel.DependsOnTable)), depContent,
-				city.Hash32([]byte(rel.Table)), relContent,
+				city.Hash32([]byte(cleanDepsOnTable)), depContent,
+				city.Hash32([]byte(cleanTable)), relContent,
 			)
 
 			if !(*seen)[mermaidRow] {
 				(*seen)[mermaidRow] = true
 				sb.WriteString(mermaidRow)
 			}
-			c.getRelationsBack(sb, tablesRelations, rel.DependsOnTable, seen)
+			c.getRelationsBack(sb, tablesRelations, cleanDepsOnTable, seen)
 		}
 	}
 }
@@ -1773,10 +1792,10 @@ func (c *ClickHouseClient) GetTableRelationshipsClean(database, table string) ([
 			// Parse the target table
 			targetParts := strings.Split(rel.DependsOnTable, ".")
 			targetDB := database
-			targetTable := rel.DependsOnTable
+			targetTable := cleanTableName(rel.DependsOnTable)
 			if len(targetParts) == 2 {
-				targetDB = targetParts[0]
-				targetTable = targetParts[1]
+				targetDB = cleanTableName(targetParts[0])
+				targetTable = cleanTableName(targetParts[1])
 			}
 			
 			relationships = append(relationships, RelationshipInfo{
@@ -1793,10 +1812,10 @@ func (c *ClickHouseClient) GetTableRelationshipsClean(database, table string) ([
 			// Parse the source table
 			sourceParts := strings.Split(rel.Table, ".")
 			sourceDB := database
-			sourceTable := rel.Table
+			sourceTable := cleanTableName(rel.Table)
 			if len(sourceParts) == 2 {
-				sourceDB = sourceParts[0]
-				sourceTable = sourceParts[1]
+				sourceDB = cleanTableName(sourceParts[0])
+				sourceTable = cleanTableName(sourceParts[1])
 			}
 			
 			relationships = append(relationships, RelationshipInfo{

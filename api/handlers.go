@@ -29,13 +29,13 @@ func (h *Handler) RegisterRoutes(router *gin.Engine) {
 		api.GET("/table/:database/:table/relationships", h.GetTableRelationships)
 	}
 	
-	// Mermaid/visualization endpoints (existing functionality)
-	mermaid := router.Group("/api/mermaid")
+	// Render/visualization endpoints (Mermaid diagrams, HTML, stats, etc.)
+	render := router.Group("/api/render")
 	{
-		mermaid.GET("/databases", h.GetDatabases)
-		mermaid.GET("/schema/:database/:table", h.GetTableSchema)
-		mermaid.GET("/database/:database/schema", h.GetDatabaseSchema)
-		mermaid.GET("/database/:database/stats", h.GetDatabaseStats)
+		render.GET("/databases", h.GetDatabases)
+		render.GET("/schema/:database/:table", h.GetTableSchema)
+		render.GET("/database/:database/schema", h.GetDatabaseSchema)
+		render.GET("/database/:database/stats", h.GetDatabaseStats)
 	}
 }
 
@@ -154,7 +154,7 @@ func (h *Handler) GetDatabasesClean(c *gin.Context) {
 	c.JSON(http.StatusOK, databases)
 }
 
-// GetTableDetailsClean returns table columns in clean JSON format
+// GetTableDetailsClean returns full table details including metadata and columns
 func (h *Handler) GetTableDetailsClean(c *gin.Context) {
 	database := c.Param("database")
 	table := c.Param("table")
@@ -164,13 +164,13 @@ func (h *Handler) GetTableDetailsClean(c *gin.Context) {
 		return
 	}
 
-	columns, err := h.clickhouse.GetTableColumnsClean(database, table)
+	details, err := h.clickhouse.GetTableColumns(database, table)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, columns)
+	c.JSON(http.StatusOK, details)
 }
 
 // GetTableRelationships returns table relationships in clean JSON format

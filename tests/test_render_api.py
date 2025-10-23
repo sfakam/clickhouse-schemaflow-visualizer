@@ -1,35 +1,35 @@
 """
-Tests for Mermaid/Visualization API endpoints
+Tests for Render/Visualization API endpoints
 """
 import pytest
 
 
 @pytest.mark.integration
-@pytest.mark.mermaid_api
-class TestMermaidAPIDatabases:
-    """Tests for GET /api/mermaid/databases endpoint"""
+@pytest.mark.render_api
+class TestRenderAPIDatabases:
+    """Tests for GET /api/render/databases endpoint"""
     
-    def test_get_mermaid_databases_returns_200(
+    def test_get_render_databases_returns_200(
         self, api_base_url, api_client, verify_api_available
     ):
-        """Test that GET /api/mermaid/databases returns 200 OK"""
-        response = api_client.get(f"{api_base_url}/api/mermaid/databases")
+        """Test that GET /api/render/databases returns 200 OK"""
+        response = api_client.get(f"{api_base_url}/api/render/databases")
         assert response.status_code == 200
     
-    def test_get_mermaid_databases_returns_json(
+    def test_get_render_databases_returns_json(
         self, api_base_url, api_client, verify_api_available
     ):
-        """Test that Mermaid databases return valid JSON"""
-        response = api_client.get(f"{api_base_url}/api/mermaid/databases")
+        """Test that Render databases return valid JSON"""
+        response = api_client.get(f"{api_base_url}/api/render/databases")
         assert response.headers["Content-Type"].startswith("application/json")
         data = response.json()
         assert isinstance(data, dict)
     
-    def test_get_mermaid_databases_html_format(
+    def test_get_render_databases_html_format(
         self, api_base_url, api_client, verify_api_available
     ):
-        """Test that Mermaid databases return HTML strings"""
-        response = api_client.get(f"{api_base_url}/api/mermaid/databases")
+        """Test that Render databases return HTML strings"""
+        response = api_client.get(f"{api_base_url}/api/render/databases")
         data = response.json()
         
         # Should be a dict where keys are database names
@@ -48,67 +48,67 @@ class TestMermaidAPIDatabases:
 
 
 @pytest.mark.integration
-@pytest.mark.mermaid_api
-class TestMermaidAPITableSchema:
-    """Tests for GET /api/mermaid/schema/:database/:table endpoint"""
+@pytest.mark.render_api
+class TestRenderAPITableSchema:
+    """Tests for GET /api/render/schema/:database/:table endpoint"""
     
-    def test_get_mermaid_schema_returns_200(
+    def test_get_render_schema_returns_200(
         self, api_base_url, api_client, test_database, test_table, verify_api_available
     ):
-        """Test that GET /api/mermaid/schema returns 200 OK"""
+        """Test that GET /api/render/schema returns 200 OK"""
         response = api_client.get(
-            f"{api_base_url}/api/mermaid/schema/{test_database}/{test_table}"
+            f"{api_base_url}/api/render/schema/{test_database}/{test_table}"
         )
         assert response.status_code == 200
     
-    def test_get_mermaid_schema_returns_json(
+    def test_get_render_schema_returns_json(
         self, api_base_url, api_client, test_database, test_table, verify_api_available
     ):
-        """Test that Mermaid schema returns valid JSON"""
+        """Test that Render schema returns valid JSON"""
         response = api_client.get(
-            f"{api_base_url}/api/mermaid/schema/{test_database}/{test_table}"
+            f"{api_base_url}/api/render/schema/{test_database}/{test_table}"
         )
         assert response.headers["Content-Type"].startswith("application/json")
         data = response.json()
         assert isinstance(data, dict)
     
-    def test_get_mermaid_schema_structure(
+    def test_get_render_schema_structure(
         self, api_base_url, api_client, test_database, test_table, verify_api_available
     ):
-        """Test that Mermaid schema has correct structure"""
+        """Test that Render schema has correct structure"""
         response = api_client.get(
-            f"{api_base_url}/api/mermaid/schema/{test_database}/{test_table}"
+            f"{api_base_url}/api/render/schema/{test_database}/{test_table}"
         )
         data = response.json()
         
         assert "schema" in data
         assert isinstance(data["schema"], str)
         
-        # Schema should be a Mermaid diagram string
+        # Schema should be a Render diagram string
         schema = data["schema"]
         assert len(schema) > 0
         # Should contain erDiagram or flowchart keywords
         assert "erDiagram" in schema or "flowchart" in schema or "graph" in schema
     
-    def test_get_mermaid_schema_missing_params_returns_400(
+    def test_get_render_schema_missing_params_returns_400(
         self, api_base_url, api_client, verify_api_available
     ):
         """Test that missing parameters return 400 or 404"""
-        response = api_client.get(f"{api_base_url}/api/mermaid/schema//")
+        response = api_client.get(f"{api_base_url}/api/render/schema//")
         assert response.status_code in [400, 404]
 
 
 @pytest.mark.integration
-@pytest.mark.mermaid_api
-class TestMermaidAPIDatabaseSchema:
-    """Tests for GET /api/mermaid/database/:database/schema endpoint"""
+@pytest.mark.render_api
+class TestRenderAPIDatabaseSchema:
+    """Tests for GET /api/render/database/:database/schema endpoint"""
     
     def test_get_database_schema_returns_200(
         self, api_base_url, api_client, test_database, verify_api_available
     ):
-        """Test that GET /api/mermaid/database/:database/schema returns 200 OK"""
+        """Test that GET /api/render/database/:database/schema returns 200 OK"""
         response = api_client.get(
-            f"{api_base_url}/api/mermaid/database/{test_database}/schema"
+            f"{api_base_url}/api/render/database/{test_database}/schema"
         )
         assert response.status_code == 200
     
@@ -117,7 +117,7 @@ class TestMermaidAPIDatabaseSchema:
     ):
         """Test that database schema returns valid JSON"""
         response = api_client.get(
-            f"{api_base_url}/api/mermaid/database/{test_database}/schema"
+            f"{api_base_url}/api/render/database/{test_database}/schema"
         )
         assert response.headers["Content-Type"].startswith("application/json")
         data = response.json()
@@ -128,7 +128,7 @@ class TestMermaidAPIDatabaseSchema:
     ):
         """Test that database schema has correct structure"""
         response = api_client.get(
-            f"{api_base_url}/api/mermaid/database/{test_database}/schema"
+            f"{api_base_url}/api/render/database/{test_database}/schema"
         )
         data = response.json()
         
@@ -140,7 +140,7 @@ class TestMermaidAPIDatabaseSchema:
         assert isinstance(data["schema"], str)
         assert isinstance(data["filters"], dict)
         
-        # Schema should contain Mermaid diagram
+        # Schema should contain Render diagram
         assert len(data["schema"]) > 0
         assert "flowchart" in data["schema"] or "erDiagram" in data["schema"]
     
@@ -149,7 +149,7 @@ class TestMermaidAPIDatabaseSchema:
     ):
         """Test database schema with query filters"""
         response = api_client.get(
-            f"{api_base_url}/api/mermaid/database/{test_database}/schema",
+            f"{api_base_url}/api/render/database/{test_database}/schema",
             params={"engines": ["MergeTree", "Distributed"], "metadata": "false"}
         )
         assert response.status_code == 200
@@ -163,21 +163,21 @@ class TestMermaidAPIDatabaseSchema:
         self, api_base_url, api_client, verify_api_available
     ):
         """Test that missing database returns 400 or 404"""
-        response = api_client.get(f"{api_base_url}/api/mermaid/database//schema")
+        response = api_client.get(f"{api_base_url}/api/render/database//schema")
         assert response.status_code in [400, 404]
 
 
 @pytest.mark.integration
-@pytest.mark.mermaid_api
-class TestMermaidAPIDatabaseStats:
-    """Tests for GET /api/mermaid/database/:database/stats endpoint"""
+@pytest.mark.render_api
+class TestRenderAPIDatabaseStats:
+    """Tests for GET /api/render/database/:database/stats endpoint"""
     
     def test_get_database_stats_returns_200(
         self, api_base_url, api_client, test_database, verify_api_available
     ):
-        """Test that GET /api/mermaid/database/:database/stats returns 200 OK"""
+        """Test that GET /api/render/database/:database/stats returns 200 OK"""
         response = api_client.get(
-            f"{api_base_url}/api/mermaid/database/{test_database}/stats"
+            f"{api_base_url}/api/render/database/{test_database}/stats"
         )
         assert response.status_code == 200
     
@@ -186,7 +186,7 @@ class TestMermaidAPIDatabaseStats:
     ):
         """Test that database stats return valid JSON"""
         response = api_client.get(
-            f"{api_base_url}/api/mermaid/database/{test_database}/stats"
+            f"{api_base_url}/api/render/database/{test_database}/stats"
         )
         assert response.headers["Content-Type"].startswith("application/json")
         data = response.json()
@@ -197,7 +197,7 @@ class TestMermaidAPIDatabaseStats:
     ):
         """Test that database stats have correct structure"""
         response = api_client.get(
-            f"{api_base_url}/api/mermaid/database/{test_database}/stats"
+            f"{api_base_url}/api/render/database/{test_database}/stats"
         )
         data = response.json()
         
@@ -225,5 +225,5 @@ class TestMermaidAPIDatabaseStats:
         self, api_base_url, api_client, verify_api_available
     ):
         """Test that missing database returns 400 or 404"""
-        response = api_client.get(f"{api_base_url}/api/mermaid/database//stats")
+        response = api_client.get(f"{api_base_url}/api/render/database//stats")
         assert response.status_code in [400, 404]

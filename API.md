@@ -5,15 +5,15 @@
 The ClickHouse Schema Flow Visualizer provides two sets of RESTful APIs:
 
 1. **Clean JSON API** (`/api/*`) - Structured JSON responses for programmatic access
-2. **Mermaid/Visualization API** (`/api/mermaid/*`) - Diagram and HTML-enhanced responses for UI rendering
+2. **Render/Visualization API** (`/api/render/*`) - Diagram and HTML-enhanced responses for UI rendering
 
 The application supports both native TCP and HTTP ClickHouse clients.
 
 ## Base URLs
 
 ```
-http://localhost:8080/api          # Clean JSON API
-http://localhost:8080/api/mermaid  # Mermaid/Visualization API
+http://localhost:8080/api         # Clean JSON API
+http://localhost:8080/api/render  # Render/Visualization API
 ```
 
 ## Client Configuration
@@ -240,13 +240,13 @@ curl -X GET "http://localhost:8080/api/table/default/mv_user_stats/relationships
 
 ---
 
-## Mermaid/Visualization API Endpoints
+## Render/Visualization API Endpoints
 
 These endpoints return HTML-enhanced or Mermaid diagram strings optimized for UI rendering.
 
 ### 1. Get Databases (Mermaid Format)
 
-**Endpoint**: `GET /api/mermaid/databases`
+**Endpoint**: `GET /api/render/databases`
 
 **Description**: Returns databases and tables with HTML-formatted strings including icons and formatted metadata.
 
@@ -263,7 +263,7 @@ These endpoints return HTML-enhanced or Mermaid diagram strings optimized for UI
 
 **Example Request**:
 ```bash
-curl -X GET "http://localhost:8080/api/mermaid/databases"
+curl -X GET "http://localhost:8080/api/render/databases"
 ```
 
 **Example Response**:
@@ -285,7 +285,7 @@ curl -X GET "http://localhost:8080/api/mermaid/databases"
 
 ### 2. Get Table Schema (Mermaid Diagram)
 
-**Endpoint**: `GET /api/mermaid/schema/:database/:table`
+**Endpoint**: `GET /api/render/schema/:database/:table`
 
 **Description**: Returns a Mermaid.js flowchart diagram showing table relationships.
 
@@ -302,7 +302,7 @@ curl -X GET "http://localhost:8080/api/mermaid/databases"
 
 **Example Request**:
 ```bash
-curl -X GET "http://localhost:8080/api/mermaid/schema/default/users"
+curl -X GET "http://localhost:8080/api/render/schema/default/users"
 ```
 
 **Example Response**:
@@ -316,7 +316,7 @@ curl -X GET "http://localhost:8080/api/mermaid/schema/default/users"
 
 ### 3. Get Database Schema (Mermaid Diagram)
 
-**Endpoint**: `GET /api/mermaid/database/:database/schema`
+**Endpoint**: `GET /api/render/database/:database/schema`
 
 **Description**: Returns a comprehensive Mermaid.js flowchart for an entire database with optional filtering.
 
@@ -340,13 +340,13 @@ curl -X GET "http://localhost:8080/api/mermaid/schema/default/users"
 **Example Request**:
 ```bash
 # Get all tables
-curl -X GET "http://localhost:8080/api/mermaid/database/default/schema"
+curl -X GET "http://localhost:8080/api/render/database/default/schema"
 
 # Filter by specific engines
-curl -X GET "http://localhost:8080/api/mermaid/database/default/schema?engines=MergeTree&engines=Distributed"
+curl -X GET "http://localhost:8080/api/render/database/default/schema?engines=MergeTree&engines=Distributed"
 
 # Exclude metadata tables
-curl -X GET "http://localhost:8080/api/mermaid/database/default/schema?metadata=false"
+curl -X GET "http://localhost:8080/api/render/database/default/schema?metadata=false"
 ```
 
 **Example Response**:
@@ -365,7 +365,7 @@ curl -X GET "http://localhost:8080/api/mermaid/database/default/schema?metadata=
 
 ### 4. Get Database Statistics
 
-**Endpoint**: `GET /api/mermaid/database/:database/stats`
+**Endpoint**: `GET /api/render/database/:database/stats`
 
 **Description**: Returns comprehensive statistics for a database including table counts, row counts, and size by engine type.
 
@@ -391,7 +391,7 @@ curl -X GET "http://localhost:8080/api/mermaid/database/default/schema?metadata=
 
 **Example Request**:
 ```bash
-curl -X GET "http://localhost:8080/api/mermaid/database/default/stats"
+curl -X GET "http://localhost:8080/api/render/database/default/stats"
 ```
 
 **Example Response**:
@@ -487,7 +487,7 @@ null
 
 ## API Comparison
 
-| Feature | Clean JSON API (`/api/*`) | Mermaid API (`/api/mermaid/*`) |
+| Feature | Clean JSON API (`/api/*`) | Render API (`/api/render/*`) |
 |---------|---------------------------|--------------------------------|
 | **Purpose** | Programmatic access | UI visualization |
 | **Response Format** | Clean JSON structures | HTML/Mermaid strings |
@@ -538,20 +538,20 @@ curl -X GET "http://localhost:8080/api/table/default/users" | jq '.'
 curl -X GET "http://localhost:8080/api/table/default/users/relationships" | jq '.'
 ```
 
-### Example 2: Mermaid/Visualization API Workflow
+### Example 2: Render/Visualization API Workflow
 
 ```bash
 # 1. Get databases with HTML formatting for UI
-curl -X GET "http://localhost:8080/api/mermaid/databases" | jq '.'
+curl -X GET "http://localhost:8080/api/render/databases" | jq '.'
 
 # 2. Get Mermaid diagram for a specific table
-curl -X GET "http://localhost:8080/api/mermaid/schema/default/users" | jq '.schema'
+curl -X GET "http://localhost:8080/api/render/schema/default/users" | jq '.schema'
 
 # 3. Get comprehensive database schema diagram
-curl -X GET "http://localhost:8080/api/mermaid/database/default/schema" | jq '.schema'
+curl -X GET "http://localhost:8080/api/render/database/default/schema" | jq '.schema'
 
 # 4. Get database statistics
-curl -X GET "http://localhost:8080/api/mermaid/database/default/stats" | jq '.'
+curl -X GET "http://localhost:8080/api/render/database/default/stats" | jq '.'
 ```
 
 ### Example 3: JavaScript/Frontend Integration
@@ -573,10 +573,10 @@ async function getDatabaseInfo() {
   console.log('Relationships:', relationships);
 }
 
-// Using Mermaid API for visualization
+// Using Render API for visualization
 async function renderDatabaseSchema() {
   // Get Mermaid schema
-  const response = await fetch('/api/mermaid/database/default/schema')
+  const response = await fetch('/api/render/database/default/schema')
     .then(r => r.json());
   
   // Render with Mermaid.js
@@ -585,7 +585,7 @@ async function renderDatabaseSchema() {
   element.innerHTML = svg;
   
   // Get and display statistics
-  const stats = await fetch('/api/mermaid/database/default/stats')
+  const stats = await fetch('/api/render/database/default/stats')
     .then(r => r.json());
   console.log('Database statistics:', stats);
 }
@@ -614,7 +614,7 @@ response = requests.get(f"{BASE_URL}/table/default/users/relationships")
 relationships = response.json()
 print(f"Found {len(relationships)} relationships")
 
-# Get database statistics (Mermaid API)
+# Get database statistics (Render API)
 response = requests.get(f"{BASE_URL}/mermaid/database/default/stats")
 stats = response.json()
 print(f"Total tables: {stats['total_tables']}")

@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadDatabases() {
     try {
-        const response = await fetch('/api/mermaid/databases');
+        const response = await fetch('/api/render/databases');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -365,7 +365,7 @@ async function loadTableSchema() {
     if (!selectedDatabase || !selectedTable) return;
 
     try {
-        const response = await fetch(`/api/mermaid/schema/${selectedDatabase}/${selectedTable}`);
+        const response = await fetch(`/api/render/schema/${selectedDatabase}/${selectedTable}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -892,7 +892,7 @@ async function loadDatabaseStats(database) {
     if (!database) return;
 
     try {
-        const response = await fetch(`/api/mermaid/database/${database}/stats`);
+        const response = await fetch(`/api/render/database/${database}/stats`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -1197,7 +1197,7 @@ async function loadDatabaseSchema(database) {
         selectedEngines.forEach(engine => params.append('engines', engine));
         params.append('metadata', includeMetadata.toString());
         
-        const response = await fetch(`/api/mermaid/database/${database}/schema?${params.toString()}`);
+        const response = await fetch(`/api/render/database/${database}/schema?${params.toString()}`);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
