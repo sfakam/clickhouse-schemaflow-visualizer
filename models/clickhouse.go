@@ -1076,7 +1076,7 @@ func (c *ClickHouseClient) GenerateMermaidSchema(dbName, tableName string) (stri
 
 	// Start building the Mermaid schema
 	var sb strings.Builder
-	sb.WriteString("flowchart TB\n")
+	sb.WriteString("flowchart LR\n")
 
 	c.cache.mutex.RLock()
 	relations := c.cache.Relations
@@ -1210,30 +1210,31 @@ func (c *ClickHouseClient) GenerateDatabaseMermaidSchema(dbName string, engineFi
 		"StripeLog":                "#9edae5", // Light Cyan
 	}
 
-	engineIcons := map[string]string{
-		"MergeTree":                "fa-solid fa-database",
-		"ReplicatedMergeTree":      "fa-solid fa-copy",
-		"SummingMergeTree":         "fa-solid fa-calculator",
-		"ReplicatedSummingMergeTree": "fa-solid fa-calculator",
-		"ReplacingMergeTree":       "fa-solid fa-sync-alt",
-		"ReplicatedReplacingMergeTree": "fa-solid fa-sync-alt",
-		"AggregatingMergeTree":     "fa-solid fa-chart-bar",
-		"ReplicatedAggregatingMergeTree": "fa-solid fa-chart-bar",
-		"CollapsingMergeTree":      "fa-solid fa-compress",
-		"ReplicatedCollapsingMergeTree": "fa-solid fa-compress",
-		"VersionedCollapsingMergeTree": "fa-solid fa-code-branch",
-		"ReplicatedVersionedCollapsingMergeTree": "fa-solid fa-code-branch",
-		"GraphiteMergeTree":        "fa-solid fa-chart-line",
-		"ReplicatedGraphiteMergeTree": "fa-solid fa-chart-line",
-		"MaterializedView":         "fa-solid fa-eye",
-		"View":                     "fa-solid fa-search",
-		"Dictionary":               "fa-solid fa-book",
-		"Distributed":              "fa-solid fa-share-alt",
-		"Memory":                   "fa-solid fa-memory",
-		"Log":                      "fa-solid fa-file-text",
-		"TinyLog":                  "fa-solid fa-file",
-		"StripeLog":                "fa-solid fa-stream",
-	}
+	// engineIcons removed - no longer needed since legend is disabled
+	// engineIcons := map[string]string{
+	// 	"MergeTree":                "fa-solid fa-database",
+	// 	"ReplicatedMergeTree":      "fa-solid fa-copy",
+	// 	"SummingMergeTree":         "fa-solid fa-calculator",
+	// 	"ReplicatedSummingMergeTree": "fa-solid fa-calculator",
+	// 	"ReplacingMergeTree":       "fa-solid fa-sync-alt",
+	// 	"ReplicatedReplacingMergeTree": "fa-solid fa-sync-alt",
+	// 	"AggregatingMergeTree":     "fa-solid fa-chart-bar",
+	// 	"ReplicatedAggregatingMergeTree": "fa-solid fa-chart-bar",
+	// 	"CollapsingMergeTree":      "fa-solid fa-compress",
+	// 	"ReplicatedCollapsingMergeTree": "fa-solid fa-compress",
+	// 	"VersionedCollapsingMergeTree": "fa-solid fa-code-branch",
+	// 	"ReplicatedVersionedCollapsingMergeTree": "fa-solid fa-code-branch",
+	// 	"GraphiteMergeTree":        "fa-solid fa-chart-line",
+	// 	"ReplicatedGraphiteMergeTree": "fa-solid fa-chart-line",
+	// 	"MaterializedView":         "fa-solid fa-eye",
+	// 	"View":                     "fa-solid fa-search",
+	// 	"Dictionary":               "fa-solid fa-book",
+	// 	"Distributed":              "fa-solid fa-share-alt",
+	// 	"Memory":                   "fa-solid fa-memory",
+	// 	"Log":                      "fa-solid fa-file-text",
+	// 	"TinyLog":                  "fa-solid fa-file",
+	// 	"StripeLog":                "fa-solid fa-stream",
+	// }
 
 	// Track processed tables and their engine types
 	processedTables := make(map[string]bool)
@@ -1343,21 +1344,21 @@ func (c *ClickHouseClient) GenerateDatabaseMermaidSchema(dbName string, engineFi
 
 
 
-	// Add legend for engine types
-	if len(engineCounts) > 0 {
-		sb.WriteString("\n    %% Legend\n")
-		legendId := 999999
-		for engineType, count := range engineCounts {
-			if icon, exists := engineIcons[engineType]; exists {
-				legendContent := fmt.Sprintf("<i class=\"%s\"></i> %s (%d)", icon, engineType, count)
-				sb.WriteString(fmt.Sprintf("    %d[\"%s\"]\n", legendId, legendContent))
-				if color, exists := engineStyles[engineType]; exists {
-					sb.WriteString(fmt.Sprintf("    style %d fill:%s,stroke:#333,stroke-width:1px,color:#fff\n", legendId, color))
-				}
-				legendId++
-			}
-		}
-	}
+	// Legend removed - commented out for cleaner diagrams
+	// if len(engineCounts) > 0 {
+	// 	sb.WriteString("\n    %% Legend\n")
+	// 	legendId := 999999
+	// 	for engineType, count := range engineCounts {
+	// 		if icon, exists := engineIcons[engineType]; exists {
+	// 			legendContent := fmt.Sprintf("<i class=\"%s\"></i> %s (%d)", icon, engineType, count)
+	// 			sb.WriteString(fmt.Sprintf("    %d[\"%s\"]\n", legendId, legendContent))
+	// 			if color, exists := engineStyles[engineType]; exists {
+	// 				sb.WriteString(fmt.Sprintf("    style %d fill:%s,stroke:#333,stroke-width:1px,color:#fff\n", legendId, color))
+	// 			}
+	// 			legendId++
+	// 		}
+	// 	}
+	// }
 
 	// Log the complete Mermaid diagram for external validation
 	mermaidSchema := sb.String()
@@ -1534,7 +1535,7 @@ func (c *ClickHouseClient) getRelationshipType(relation TableRelation) string {
 	case strings.Contains(strings.ToLower(relation.Icon), "dictionary"):
 		return "..->|dictionary|"
 	default:
-		return "-->|depends|"
+		return "-->"
 	}
 }
 

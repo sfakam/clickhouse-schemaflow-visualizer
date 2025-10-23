@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/fulgerX2007/clickhouse-schemaflow-visualizer/models"
@@ -72,6 +73,9 @@ func (h *Handler) GetTableSchema(c *gin.Context) {
 		return
 	}
 
+	// Log full Mermaid diagram for debugging
+	log.Printf("Mermaid diagram for %s.%s:\n%s\n", database, table, schema)
+
 	c.JSON(http.StatusOK, gin.H{"schema": schema})
 }
 
@@ -112,6 +116,9 @@ func (h *Handler) GetDatabaseSchema(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Log full Mermaid diagram for debugging
+	log.Printf("Mermaid diagram for database %s (engines: %v, metadata: %v):\n%s\n", database, engines, includeMetadata, schema)
 
 	c.JSON(http.StatusOK, gin.H{
 		"database": database,

@@ -1,11 +1,13 @@
 const databaseTree = document.getElementById('database-tree');
 const refreshBtn = document.getElementById('refresh-btn');
 const currentSelection = document.getElementById('current-selection');
-const schemaDiagram = document.getElementById('schema-diagram');
+const diagram = document.getElementById('diagram');
+const diagramViewport = document.getElementById('diagram-viewport');
 const exportHtmlBtn = document.getElementById('export-html-btn');
-const zoomInBtn = document.getElementById('zoom-in-btn');
-const zoomOutBtn = document.getElementById('zoom-out-btn');
-const resetZoomBtn = document.getElementById('reset-zoom-btn');
+const zoomInBtn = document.getElementById('zoomInBtn');
+const zoomOutBtn = document.getElementById('zoomOutBtn');
+const resetZoomBtn = document.getElementById('zoomResetBtn');
+const zoomLevelSpan = document.getElementById('zoomLevel');
 const tableDetailsContainer = document.querySelector('.table-details-container');
 const tableDetailsContent = document.getElementById('table-details');
 const toggleTableDetailsBtn = document.getElementById('toggle-table-details');
@@ -14,7 +16,17 @@ let databases = [];
 let selectedDatabase = null;
 let selectedTable = null;
 let currentSchema = null;
-let currentZoomLevel = 1; // Default zoom level
+let zoom = 1.0;
+let panX = 0;
+let panY = 0;
+const ZOOM_STEP = 0.1;
+const ZOOM_MIN = 0.3;
+const ZOOM_MAX = 2.5;
+let isDragging = false;
+let dragStartX = 0;
+let dragStartY = 0;
+let dragStartPanX = 0;
+let dragStartPanY = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize Mermaid once at startup
@@ -56,9 +68,67 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshBtn.addEventListener('click', loadDatabases);
     exportHtmlBtn.addEventListener('click', exportHtml);
     
-    zoomInBtn.addEventListener('click', zoomIn);
-    zoomOutBtn.addEventListener('click', zoomOut);
-    resetZoomBtn.addEventListener('click', resetZoom);
+    // Setup new zoom/pan controls
+    if (zoomInBtn) zoomInBtn.addEventListener('click', () => setZoom(zoom + ZOOM_STEP));
+    if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => setZoom(zoom - ZOOM_STEP));
+    if (resetZoomBtn) resetZoomBtn.addEventListener('click', () => { setZoom(1.0); setPan(0, 0); });
+    
+    // Setup drag to pan
+    if (diagramViewport) {
+        diagramViewport.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            dragStartPanX = panX;
+            dragStartPanY = panY;
+            diagramViewport.style.cursor = "grabbing";
+        });
+        
+        window.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+            let deltaX = e.clientX - dragStartX;
+            let deltaY = e.clientY - dragStartY;
+            setPan(dragStartPanX + deltaX, dragStartPanY + deltaY, false);
+        });
+        
+        window.addEventListener('mouseup', function() {
+            if (isDragging) {
+                isDragging = false;
+                diagramViewport.style.cursor = "grab";
+            }
+        });
+        
+        // Touch drag for mobile
+        diagramViewport.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                dragStartX = e.touches[0].clientX;
+                dragStartY = e.touches[0].clientY;
+                dragStartPanX = panX;
+                dragStartPanY = panY;
+            }
+        });
+        
+        diagramViewport.addEventListener('touchmove', function(e) {
+            if (!isDragging) return;
+            let deltaX = e.touches[0].clientX - dragStartX;
+            let deltaY = e.touches[0].clientY - dragStartY;
+            setPan(dragStartPanX + deltaX, dragStartPanY + deltaY, false);
+        });
+        
+        diagramViewport.addEventListener('touchend', function() {
+            isDragging = false;
+        });
+        
+        // Zoom with Ctrl + Scroll
+        diagramViewport.addEventListener('wheel', function(e) {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                let step = (e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP);
+                setZoom(zoom + step);
+            }
+        }, { passive: false });
+    }
     
     // Setup view mode selector
     const viewModeRadios = document.querySelectorAll('input[name="viewMode"]');
@@ -417,41 +487,34 @@ function renderSchema() {
 }
 
 function renderMermaidDiagram(schema) {
-    schemaDiagram.innerHTML = '';
+    diagram.innerHTML = '';
 
     const container = document.createElement('div');
     container.className = 'mermaid';
     container.textContent = schema;
-    schemaDiagram.appendChild(container);
+    diagram.appendChild(container);
 
     try {
-        // Use the modern mermaid.run() method instead of deprecated mermaid.init()
-        mermaid.run({
-            querySelector: '.mermaid'
-        });
-        
-        // Check if the SVG was properly rendered
+        mermaid.run({ querySelector: '.mermaid' });
         setTimeout(() => {
-            const svg = schemaDiagram.querySelector('svg');
+            const svg = diagram.querySelector('svg');
             if (svg) {
                 const width = svg.style.maxWidth || svg.getAttribute('width');
-                if (width === '16px' || !svg.querySelector('.nodes').hasChildNodes()) {
+                if (width === '16px' || !svg.querySelector('.nodes')?.hasChildNodes()) {
                     showRawSchema(schema);
                 }
             }
+            // Reset zoom/pan after rendering
+            setZoom(1.0, false);
+            setPan(0, 0, false);
         }, 100);
-        
-        applyZoom();
-        
-        setupMouseWheelZoom();
     } catch (error) {
-        // Fallback to show raw schema
         showRawSchema(schema);
     }
 }
 
 function showRawSchema(schema) {
-    schemaDiagram.innerHTML = '';
+    diagram.innerHTML = '';
     const rawSchemaDisplay = document.createElement('pre');
     rawSchemaDisplay.style.whiteSpace = 'pre-wrap';
     rawSchemaDisplay.style.fontFamily = 'monospace';
@@ -459,7 +522,7 @@ function showRawSchema(schema) {
     rawSchemaDisplay.style.border = '1px solid #ccc';
     rawSchemaDisplay.style.backgroundColor = '#f5f5f5';
     rawSchemaDisplay.textContent = schema;
-    schemaDiagram.appendChild(rawSchemaDisplay);
+    diagram.appendChild(rawSchemaDisplay);
     showError("Failed to render diagram. Showing raw schema instead.");
 }
 
@@ -1215,4 +1278,25 @@ async function loadDatabaseSchema(database) {
     } catch (error) {
         showError(`Failed to load database schema: ${error.message}`);
     }
+}
+
+// Zoom and pan helper functions
+function updateTransform(animate=true) {
+    if (!diagram) return;
+    diagram.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    diagram.style.transition = animate ? "transform 0.2s cubic-bezier(.4,0,.2,1)" : "none";
+    if (zoomLevelSpan) {
+        zoomLevelSpan.textContent = `${Math.round(zoom*100)}%`;
+    }
+}
+
+function setZoom(newZoom, animate=true) {
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, newZoom));
+    updateTransform(animate);
+}
+
+function setPan(newPanX, newPanY, animate=true) {
+    panX = newPanX;
+    panY = newPanY;
+    updateTransform(animate);
 }
